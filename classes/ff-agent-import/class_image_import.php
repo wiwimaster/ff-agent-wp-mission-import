@@ -50,8 +50,6 @@ class ffami_image_import {
                 }
             }
 
-            print_r($gallery_ids);
-
             if (!empty($gallery_ids)) {
                 // Append a gallery shortcode at the end of the post content
                 $gallery_shortcode = '[gallery ids="' . implode(',', $gallery_ids) . '"]';
@@ -98,10 +96,10 @@ class ffami_image_import {
             ),
         ));
 
+        // Wenn ja, direkt die ID zurückliefern
         if (! empty($existing)) {
-            echo '<div>Bild existiert bereits: ' . $thumbnail_url . 'ID: ' . $existing[0] . '</div>';
-            // Wenn ja, direkt die ID zurückliefern
             return (int) $existing[0];
+
         } else {
             // 2) Datum verarbeiten
             $timestamp = $this->mission->datetime ? strtotime($this->mission->datetime) : current_time('timestamp');
