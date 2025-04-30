@@ -51,6 +51,8 @@ class ffami_mission {
         $this->set_duration($mission_data['duration']);
         $this->set_location($mission_data['location']);
         $this->set_person_count($mission_data['personCount']);
+        $this->set_mission_type($mission_data['missionType']);
+        $this->set_vehicles($mission_data['vehicles']);
     }
 
 
@@ -129,14 +131,30 @@ class ffami_mission {
      * @return void
      */
     public function set_duration(string $duration): void {
-        $this->duration = DateInterval::createFromDateString($durText);
-
-        // Optional prüfen:
-        if (! $this->duration instanceof DateInterval) {
-            throw new \Exception("Ungültiges Duration-Format");
-        };
+        // 1) Gesamtminuten ermitteln wie gehabt
+        if (preg_match(
+            '/^(?P<h>\d+)\s*h(?:ou?rs?)?[\s,]*(?P<m>\d+)\s*min$/i',
+            $duration, $m
+        )) {
+            $totalMinutes = (int)$m['h'] * 60 + (int)$m['m'];
+        }
+        elseif (preg_match('/^(?P<m>\d+)\s*min$/i', $duration, $m)) {
+            $totalMinutes = (int)$m['m'];
+        }
+        else {
+            throw new \InvalidArgumentException("Ungültiges Duration-Format: $duration");
+        }
+    
+        // 2) Stunden und verbleibende Minuten aufteilen
+        $hours       = intdiv($totalMinutes, 60);
+        $minutesLeft = $totalMinutes % 60;
+        
+        // 3) DateInterval korrekt anlegen
+        $this->duration = new DateInterval(
+            sprintf('PT%dH%dM', $hours, $minutesLeft)
+        );
+    
     }
-
 
 
     /**
