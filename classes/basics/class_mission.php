@@ -35,6 +35,8 @@ class ffami_mission {
 
     public array $vehicles = [];
 
+    public string $md5_hash;
+
 
 
     /**
@@ -44,7 +46,6 @@ class ffami_mission {
      * @return void
      */
     public function import_mission_data($mission_data) {
-        $this->set_title($mission_data['title']);
         $this->set_content($mission_data['detail']);
         $this->set_datetime($mission_data['alarmDate']);
         $this->set_image_urls($mission_data['images']);
@@ -53,6 +54,9 @@ class ffami_mission {
         $this->set_person_count($mission_data['personCount']);
         $this->set_mission_type($mission_data['missionType']);
         $this->set_vehicles($mission_data['vehicles']);
+        $this->set_title($mission_data['title']);
+        
+        $this->set_md5_hash($mission_data);
     }
 
 
@@ -69,6 +73,7 @@ class ffami_mission {
         update_post_meta($this->post_id, 'ffami_mission_person_count', $this->person_count);
         update_post_meta($this->post_id, 'ffami_mission_type', $this->mission_type);
         update_post_meta($this->post_id, 'ffami_mission_vehicles', $this->vehicles);
+        update_post_meta($this->post_id, 'ffami_mission_hash', $this->md5_hash);
     }
 
 
@@ -79,9 +84,10 @@ class ffami_mission {
      * @return void
      */
     public function set_title($title): void {
-        $this->title = $title ?? "Einsatz";
+        $this->title = $title ?? "Einsatz " . $this->mission_type . " (" . $this->location . ")";
     }
 
+    
 
     /**
      * Set the content of the mission
@@ -164,7 +170,7 @@ class ffami_mission {
      * @return void
      */
     public function set_location($location): void {
-        $this->location = $location ?? "";
+        $this->location = $location ? str_replace(" -- Default ORT ---", "", $location) : "";
     }
 
 
@@ -203,5 +209,10 @@ class ffami_mission {
         foreach ($vehicles as $vehicle) {
             $this->vehicles[] = $vehicle['title'];
         }
+    }
+
+
+    private function set_md5_hash($mission): void {
+        $this->md5_hash = md5(serialize($mission));;
     }
 }

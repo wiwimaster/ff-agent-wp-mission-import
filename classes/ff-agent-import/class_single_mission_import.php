@@ -19,6 +19,12 @@ class ffami_single_mission_import {
      */
     private ffami_mission $mission;
 
+    private ffami_mission $stored_mission;
+
+    private array $mission_data = [];
+
+    private string $existing_post_hash = '';
+
 
 
     /**
@@ -33,8 +39,11 @@ class ffami_single_mission_import {
         $this->mission->id = $mission_id;
         $this->mission->url = $mission_url;
 
+        // Fetch the mission data from the FF Agent API
+        $this->fetch_mission_data();
+
         // only import if the mission is new or updated
-        if ($this->is_new_mission() || $this->updated_mission()) {
+        if ($this->is_new_mission() || $this->is_updated_mission()) {
 
             // Initialize the import process
             $this->import_mission_data();
@@ -43,7 +52,7 @@ class ffami_single_mission_import {
             if ($this->mission->has_images) {
                 new ffami_image_import($this->mission);
             }
-        }
+        } 
     }
 
 
@@ -55,6 +64,28 @@ class ffami_single_mission_import {
      */
     private function is_new_mission(): bool {
 
+        //check if there is a post with the post meta field "ffami_mission_id" and value of $this->mission->id
+        $args = [
+            'post_type'  => 'mission',
+            'meta_query' => [
+                [
+                    'key'     => 'ffami_mission_id',
+                    'value'   => $this->mission->id,
+                    'compare' => '=',
+                ],
+            ],
+        ];
+        $query = new WP_Query($args);
+        if ($query->have_posts()) {
+
+            //the_post();
+            $post_id = get_the_ID();
+
+            $this->existing_post_hash = get_post_meta($post_id, 'ffami_mission_md5_hash', true);
+
+            return false;
+        }
+
         return true;
     }
 
@@ -65,7 +96,17 @@ class ffami_single_mission_import {
      *
      * @return mixed post_id if the mission was already imported, false if not
      */
-    private function updated_mission(): mixed {
+    private function is_updated_mission(): bool {
+
+        if (strlen($this->existing_post_hash) > 0) {
+            //check if the md5 hash of the mission data is different from the stored hash
+            $new_hash = md5(serialize($this->mission));
+            if ($new_hash !== $this->existing_post_hash) {
+                return true;
+            } else {
+                return false;
+            }
+        }
 
         //check if the mission was already imported
 
@@ -80,16 +121,7 @@ class ffami_single_mission_import {
      * @return void
      */
     private function import_mission_data() {
-        // Fetch the mission data from the FF Agent API
-        $mission_data = $this->fetch_mission_data();
-
-        // Process the mission data
-        if ($mission_data) {
-            $this->save_mission_data($mission_data);
-        } else {
-            // Handle error: No data fetched
-            error_log('No mission data fetched from FF Agent API.');
-        }
+        $this->save_mission_data($mission_data);
     }
 
 
@@ -99,15 +131,18 @@ class ffami_single_mission_import {
      *
      * @return array|false
      */
-    private function fetch_mission_data() {
+    private function fetch_mission_data(): bool {
         $url = FFAMI_DATA_ROOT . $this->mission->url;
 
         $urlContent = file_get_contents($url);
 
-        $urlData = json_decode($urlContent, true);
+        $rawMissionData = json_decode($urlContent, true);
         if (json_last_error() === JSON_ERROR_NONE) {
 
-            return $urlData;
+            //import mission data into the mission object
+            $this->mission->import_mission_data($rawMissionData);
+
+            return true;
         } else {
             echo '<div>Fehler beim Parsen des JSON: ' . json_last_error_msg() . '</div>';
             return false;
@@ -122,13 +157,10 @@ class ffami_single_mission_import {
      * @param array $mission_data
      * @return int post ID of the created or updated post
      */
-    private function save_mission_data($mission_data): int {
-
-        //import mission data into the mission object
-        $this->mission->import_mission_data($mission_data);
+    private function save_mission_data(): int {
 
         // Generate permalink in the format "YYYY-MM-DD_" + post_title
-        $permalink = date('Y-m-d-h-i', strtotime($post_date)) . '_' . sanitize_title($post_title);
+        $permalink = date('Y-m-d-h-i', strtotime($this->mission->datetime)) . '_' . sanitize_title($this->mission->title);
 
         // Create a new custom post (type "mission")
         $post_arr = [
@@ -141,8 +173,8 @@ class ffami_single_mission_import {
         ];
 
         // If the mission was already imported, update the existing post
-        if ($this->updated_mission()) {
-            $post_arr['ID'] = $this->updated_mission();
+        if ($this->is_updated_mission()) {
+            $post_arr['ID'] = $this->stored_mission->id;
         }
 
         $post_id = wp_insert_post($post_arr);
