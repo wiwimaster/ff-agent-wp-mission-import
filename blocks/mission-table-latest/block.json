@@ -1,0 +1,25 @@
+{
+  "apiVersion": 2,
+  "name": "ffami/mission-table-latest",
+  "title": "FF Einsätze – Letzte Missionen",
+  "category": "widgets",
+  "icon": "list-view",
+  "description": "Zeigt die letzten Einsätze als Tabelle.",
+  "attributes": {
+    "limit": { "type": "number", "default": 20 },
+    "columns": {
+      "type": "array",
+      "default": ["date", "title", "type", "duration", "persons", "location"],
+      "items": { "type": "string" }
+  },
+  "pagination": { "type": "boolean", "default": false },
+  "paginationId": { "type": "string", "default": "1" },
+  "pageSize": { "type": "number", "default": 20 }
+  ,"paginationMode": { "type": "string", "default": "simple" }
+  ,"filterTypes": { "type": "array", "default": [], "items": { "type": "string" } }
+  ,"perPage": { "type": "number", "default": 20 }
+  ,"paginationPosition": { "type": "string", "default": "below" }
+  },
+  "supports": { "html": false },
+  "editorScript": "ffami-mission-table-editor"
+}

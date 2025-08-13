@@ -11,8 +11,10 @@ class ffami_plugin {
         //regsiter the custom post type
         new ffami_mission_post_type();
 
-        // Cron Manager initialisieren
-        new ffami_cron();
+    // (Legacy Cron entfernt – Scheduler aktiv)
+
+    // Frontend Blocks
+    new ffami_blocks();
 
         //load the backend
         new ffami_backend();
