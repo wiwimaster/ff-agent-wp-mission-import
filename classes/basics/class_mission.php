@@ -205,11 +205,13 @@ class ffami_mission {
         $raw_type = isset($mission_type) ? trim((string)$mission_type) : '';
         if ($raw_type !== '' && strcasecmp($raw_type, 'THL') === 0) {
             $normalized_type = 'Technische Hilfeleistung';
+        } elseif ($raw_type !== '' && strcasecmp($raw_type, 'Fire') === 0) {
+            $normalized_type = 'Brand';
         } else {
             $normalized_type = str_replace('_', ' ', $raw_type);
             $normalized_type = preg_replace('/\s+/', ' ', $normalized_type);
             $normalized_type = strtolower($normalized_type);
-            $normalized_type = ucwords($normalized_type); // Each word first letter uppercase
+            $normalized_type = ucwords($normalized_type);
         }
 
         $this->mission_type = $normalized_type ?? "";

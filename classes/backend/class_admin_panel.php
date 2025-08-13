@@ -138,6 +138,73 @@ class ffami_admin_panel {
             echo '</tbody></table>';
         }
 
+        // Scan Stats
+        $scan_stats = get_option('ffami_scan_stats', []);
+        if (!empty($scan_stats)) {
+            echo '<h3>Letzter Scan (Diff-Statistik)</h3>';
+            echo '<table class="widefat striped" style="max-width:600px">';
+            echo '<thead><tr><th>Jahr</th><th>Gefunden</th><th>Vorher</th><th>Diff</th></tr></thead><tbody>';
+            krsort($scan_stats);
+            foreach ($scan_stats as $y=>$st) {
+                echo '<tr><td>'.esc_html($y).'</td><td>'.esc_html($st['new_count']).'</td><td>'.esc_html($st['old_count']).'</td><td>'.esc_html($st['diff']).'</td></tr>';
+            }
+            echo '</tbody></table>';
+        }
+
+        // Root / Year Samples
+        if (ffami_debug_logger::is_verbose()) {
+            echo '<h3>Rohdaten Samples</h3>';
+            $root_sample = get_option('ffami_root_sample', '');
+            if ($root_sample) {
+                echo '<p><strong>Root Sample:</strong></p><pre style="max-height:200px; overflow:auto; background:#fff;">'.esc_html($root_sample).'</pre>';
+            }
+            if (!empty($scan_stats)) {
+                $shown = 0;
+                foreach ($scan_stats as $y=>$st) {
+                    $sample = get_option('ffami_year_sample_' . sanitize_key((string)$y), '');
+                    if ($sample) {
+                        echo '<p><strong>Jahr '.esc_html($y).' Sample:</strong></p><pre style="max-height:200px; overflow:auto; background:#fff;">'.esc_html($sample).'</pre>';
+                    }
+                    if (++$shown >= 3) { break; } // max 3 Samples anzeigen
+                }
+            }
+        }
+
+        // Debug Log Steuerung
+        echo '<hr><h2>Debug Log</h2>';
+        if (isset($_POST['ffami_debug_clear']) && check_admin_referer('ffami_debug_actions')) {
+            ffami_debug_logger::clear();
+            echo '<div class="notice notice-success"><p>Debug Log geleert.</p></div>';
+        }
+        if (isset($_POST['ffami_debug_verbose_toggle']) && check_admin_referer('ffami_debug_actions')) {
+            ffami_debug_logger::set_verbose(!ffami_debug_logger::is_verbose());
+            echo '<div class="notice notice-success"><p>Verbose Modus umgeschaltet.</p></div>';
+        }
+        $verbose = ffami_debug_logger::is_verbose();
+        echo '<form method="post" style="margin-bottom:10px;">';
+        wp_nonce_field('ffami_debug_actions');
+        echo '<input type="submit" name="ffami_debug_verbose_toggle" class="button" value="Verbose '.($verbose?'deaktivieren':'aktivieren').'" /> ';
+        echo '<input type="submit" name="ffami_debug_clear" class="button" value="Log leeren" />';
+        echo '</form>';
+        $log = ffami_debug_logger::get_log();
+        if (empty($log)) {
+            echo '<p><em>Keine Log-Einträge.</em></p>';
+        } else {
+            echo '<div style="max-height:400px; overflow:auto; border:1px solid #ccc; background:#fff; padding:8px;">';
+            echo '<table class="widefat fixed" style="font-size:12px;">';
+            echo '<thead><tr><th>Zeit</th><th>Nachricht</th><th>Kontext</th></tr></thead><tbody>';
+            foreach ($log as $entry) {
+                $ctx = '';
+                if (!empty($entry['context'])) { $ctx = '<pre style="white-space:pre-wrap;">'. esc_html(wp_json_encode($entry['context'], JSON_UNESCAPED_SLASHES|JSON_UNESCAPED_UNICODE)) .'</pre>'; }
+                echo '<tr>';
+                echo '<td>'.esc_html($entry['time']).'</td>';
+                echo '<td>'.esc_html($entry['message']).'</td>';
+                echo '<td>'.$ctx.'</td>';
+                echo '</tr>';
+            }
+            echo '</tbody></table></div>';
+        }
+
     // Debug Einzel-Importe entfernt – Cron übernimmt periodischen Import.
 
         //get the content of FFAMI_FILE_MAIN and display it
