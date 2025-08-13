@@ -11,13 +11,21 @@
 class ffami_scheduler {
 
     private const RECURRING_HOOK = 'ffami_check_years';
+    private const FULL_RECURRING_HOOK = 'ffami_check_years_full';
     private const IMPORT_HOOK    = 'ffami_import_single_mission';
     private const GROUP          = 'ffami';
-    private const INTERVAL       = 300; // 5 Minuten
+    private const INTERVAL       = 300; // 5 Minuten (Quick Year Scan)
+    private const FULL_INTERVAL  = 604800; // 1 Woche (Full Scan)
+    private const DAILY_INTERVAL = 86400; // 1 Tag (Root Refresh)
+    private const DAILY_ROOT_HOOK = 'ffami_refresh_root_years';
     private const OPTION_ROOT_MD5 = 'ffami_root_md5';
 
+    private const OPTION_PENDING = 'ffami_pending_missions'; // array of mission_ids currently geplant aber noch nicht abgeschlossen
+
     public function __construct() {
-        add_action(self::RECURRING_HOOK, [$this, 'check_years']);
+    add_action(self::RECURRING_HOOK, [$this, 'check_years']); // höchstes Jahr (cached)
+    add_action(self::FULL_RECURRING_HOOK, [$this, 'check_years_full']); // alle Jahre (cached root)
+    add_action(self::DAILY_ROOT_HOOK, [$this, 'refresh_root_years']); // täglicher Root-Fetch
         add_action(self::IMPORT_HOOK, [$this, 'import_single_mission'], 10, 2);
         add_action('admin_notices', [$this, 'maybe_admin_notice']);
         add_action('plugins_loaded', [$this, 'schedule_recurring'], 20);
@@ -39,7 +47,13 @@ class ffami_scheduler {
             return;
         }
         if (!as_has_scheduled_action(self::RECURRING_HOOK, [], self::GROUP)) {
-            as_schedule_recurring_action(time() + 60, self::INTERVAL, self::RECURRING_HOOK, [], self::GROUP);
+            as_schedule_recurring_action(time() + 90, self::INTERVAL, self::RECURRING_HOOK, [], self::GROUP);
+        }
+        if (!as_has_scheduled_action(self::FULL_RECURRING_HOOK, [], self::GROUP)) {
+            as_schedule_recurring_action(time() + 300, self::FULL_INTERVAL, self::FULL_RECURRING_HOOK, [], self::GROUP);
+        }
+        if (!as_has_scheduled_action(self::DAILY_ROOT_HOOK, [], self::GROUP)) {
+            as_schedule_recurring_action(time() + 180, self::DAILY_INTERVAL, self::DAILY_ROOT_HOOK, [], self::GROUP);
         }
     }
 
@@ -48,48 +62,29 @@ class ffami_scheduler {
         return !empty($uid);
     }
 
-    public function check_years(): void {
-        if (! $this->has_uid()) {
-            return;
-        }
-        $rootUrl = $this->get_root_url();
-        if (!$rootUrl) {
-            return;
-        }
+    public function check_years(): void { // Quick Scan: nur höchstes Jahr aus cache
+        $this->run_scan('current_cached');
+    }
 
-        $rootPayload = $this->fetch_json($rootUrl);
-        if (!$rootPayload) {
-            ffami_debug_logger::log('Root JSON nicht ladbar', ['url' => $rootUrl]);
-            return;
-        }
-        [$rootData, $rootRaw] = $rootPayload;
-        ffami_debug_logger::log('Root Keys', ['keys' => array_slice(array_keys((array)$rootData), 0, 50)]);
-        update_option('ffami_root_sample', substr($rootRaw, 0, 1200), false);
-        $rootMd5   = md5($rootRaw);
-        $storedRoot = get_option(self::OPTION_ROOT_MD5, '');
-        if ($storedRoot !== $rootMd5) {
-            update_option(self::OPTION_ROOT_MD5, $rootMd5, false);
-            update_option('ffami_root_json', $rootRaw, false);
-            ffami_debug_logger::log('Root geändert', ['md5' => $rootMd5]);
-        }
-        if (!isset($rootData['years']) || !is_array($rootData['years'])) {
-            // Vielleicht liegt die Jahresliste direkt als Array vor -> versuchen Keys die wie Jahreszahlen aussehen
-            $guessedYears = [];
-            foreach ($rootData as $k => $v) {
-                if (preg_match('/^20\d{2}$/', (string)$k) && is_array($v) && isset($v['url'])) {
-                    $guessedYears[$k] = $v;
-                }
-            }
-            if (empty($guessedYears)) {
-                ffami_debug_logger::log('Keine years-Struktur gefunden', ['keys' => array_keys($rootData)]);
-                return;
-            }
-            $rootData['years'] = $guessedYears;
-        }
+    public function check_years_full(): void { // Weekly full scan
+        $this->run_scan('full');
+    }
 
-        $scheduled = 0;
-        $scanStats = [];
-        foreach ($rootData['years'] as $year => $info) {
+    private function run_scan(string $mode): void {
+        if (!$this->has_uid()) { return; }
+        ffami_debug_logger::log('Scan Start', ['mode'=>$mode]);
+        $rootData = $this->get_cached_root_data($mode === 'full');
+        if (!$rootData) { ffami_debug_logger::log('Kein Root Cache verfügbar'); return; }
+        if (!isset($rootData['years']) || !is_array($rootData['years'])) { ffami_debug_logger::log('Root ohne years'); return; }
+
+        $scheduled = 0; $scanStats = [];
+        $years = $rootData['years'];
+        if ($mode === 'current_cached') {
+            $highest = $this->get_highest_year($years);
+            if ($highest === null || !isset($years[$highest])) { ffami_debug_logger::log('Höchstes Jahr nicht gefunden'); return; }
+            $years = [ $highest => $years[$highest] ];
+        }
+        foreach ($years as $year => $info) {
             if (empty($info['url'])) {
                 continue;
             }
@@ -108,7 +103,7 @@ class ffami_scheduler {
             if ($storedYearMd5 === $yearMd5) {
                 // MD5 unverändert -> prüfen ob Jahr bereits vollständig importiert ist
                 $completeFlagKey = 'ffami_year_completed_' . sanitize_key((string)$year);
-                if (get_option($completeFlagKey)) { // bereits als vollständig markiert
+                if ($mode === 'current_cached' && get_option($completeFlagKey)) { // bereits als vollständig markiert
                     continue;
                 }
                 // Missionsliste extrahieren und fehlende planen
@@ -119,21 +114,32 @@ class ffami_scheduler {
                 }
                 $missing = $this->find_missing_missions($allMissions);
                 if (!empty($missing)) {
-                    ffami_debug_logger::log('Jahr Vollständigkeits-Check: fehlende Missionen', ['year'=>$year,'missing'=>count($missing),'total'=>$missionCount]);
+                    ffami_debug_logger::log('Jahr Vollständigkeits-Check: fehlende Missionen', [
+                        'year'=>$year,
+                        'missing'=>count($missing),
+                        'total'=>$missionCount,
+                        'pending_count'=>count($this->get_pending())
+                    ]);
                     foreach ($missing as $mission) {
                         $missionUrl = $mission['detailUrl'] ?? ($mission['url'] ?? null);
                         if (!$missionUrl) { continue; }
                         $missionId = $this->derive_mission_id($mission);
+                        // Wenn bereits pending -> nicht erneut planen
+                        if ($this->is_pending($missionId)) {
+                            ffami_debug_logger::log('Mission bereits pending, nicht erneut geplant', ['year'=>$year,'id'=>$missionId]);
+                            continue;
+                        }
                         $args = ['mission_id'=>$missionId,'mission_url'=>$missionUrl];
                         if (function_exists('as_has_scheduled_action') && as_has_scheduled_action(self::IMPORT_HOOK, $args, self::GROUP)) { continue; }
                         if (function_exists('as_enqueue_async_action')) {
                             as_enqueue_async_action(self::IMPORT_HOOK, $args, self::GROUP);
-                            $scheduled++; ffami_debug_logger::log('Mission nachgeplant (Vollständigkeit)', ['year'=>$year,'id'=>$missionId]);
+                            $scheduled++; $this->add_pending($missionId);
+                            ffami_debug_logger::log('Mission nachgeplant (Vollständigkeit)', ['year'=>$year,'id'=>$missionId]);
                         }
                     }
                 }
                 // Wenn keine fehlenden, Jahr als vollständig markieren
-                if (empty($missing)) {
+                if ($mode === 'current_cached' && empty($missing)) {
                     update_option($completeFlagKey, 1, false);
                     ffami_debug_logger::log('Jahr als vollständig markiert', ['year'=>$year,'missions'=>$missionCount]);
                 }
@@ -158,6 +164,10 @@ class ffami_scheduler {
                     continue;
                 }
                 $missionId = $this->derive_mission_id($mission);
+                if ($this->is_pending($missionId)) {
+                    ffami_debug_logger::log('Mission diff erkannt aber noch pending', ['year'=>$year,'id'=>$missionId]);
+                    continue;
+                }
                 $args = ['mission_id' => $missionId, 'mission_url' => $missionUrl];
                 if (function_exists('as_has_scheduled_action') && as_has_scheduled_action(self::IMPORT_HOOK, $args, self::GROUP)) {
                     continue;
@@ -165,6 +175,7 @@ class ffami_scheduler {
                 if (function_exists('as_enqueue_async_action')) {
                     as_enqueue_async_action(self::IMPORT_HOOK, $args, self::GROUP);
                     $scheduled++;
+                    $this->add_pending($missionId);
                     ffami_debug_logger::log('Mission geplant', ['year' => $year, 'id' => $missionId, 'url' => $missionUrl]);
                 }
             }
@@ -176,12 +187,64 @@ class ffami_scheduler {
         }
         update_option('ffami_last_check', current_time('mysql'), false);
         update_option('ffami_scan_stats', $scanStats, false);
-        ffami_debug_logger::log('Scan abgeschlossen', ['scheduled' => $scheduled]);
+        ffami_debug_logger::log('Scan abgeschlossen', ['mode'=>$mode,'scheduled' => $scheduled]);
+    }
+
+    /**
+     * Täglicher Root-Refresh: holt Root JSON, speichert MD5, bestimmt höchstes Jahr.
+     */
+    public function refresh_root_years() : void {
+        if (!$this->has_uid()) { return; }
+        $rootUrl = $this->get_root_url(); if (!$rootUrl) { return; }
+        $payload = $this->fetch_json($rootUrl);
+        if (!$payload) { ffami_debug_logger::log('Root Refresh fehlgeschlagen', ['url'=>$rootUrl]); return; }
+        [ $data, $raw ] = $payload;
+        $rootMd5 = md5($raw);
+        update_option(self::OPTION_ROOT_MD5, $rootMd5, false);
+        update_option('ffami_root_json', $raw, false);
+        update_option('ffami_root_fetched_at', time(), false);
+        if (isset($data['years']) && is_array($data['years'])) {
+            $highest = $this->get_highest_year($data['years']);
+            if ($highest !== null) { update_option('ffami_highest_year', (int)$highest, false); }
+            ffami_debug_logger::log('Root Refresh', ['years'=>count($data['years']),'highest'=>$highest]);
+        } else {
+            ffami_debug_logger::log('Root Refresh ohne years Struktur');
+        }
+    }
+
+    private function get_highest_year(array $years) : ?int {
+        $nums = [];
+        foreach ($years as $y => $_) { if (preg_match('/^(20\d{2})$/', (string)$y)) { $nums[] = (int)$y; } }
+        if (empty($nums)) { return null; }
+        rsort($nums, SORT_NUMERIC);
+        return $nums[0];
+    }
+
+    private function get_cached_root_data(bool $allowFetchFallback=false) : ?array {
+        $raw = get_option('ffami_root_json', '');
+        if ($raw) {
+            $decoded = json_decode($raw, true);
+            if (is_array($decoded)) { return $decoded; }
+        }
+        if ($allowFetchFallback) { // fallback fetch wenn gewünscht
+            $rootUrl = $this->get_root_url();
+            $payload = $rootUrl ? $this->fetch_json($rootUrl) : null;
+            if ($payload) {
+                [ $data, $rawNew ] = $payload;
+                update_option('ffami_root_json', $rawNew, false);
+                update_option('ffami_root_fetched_at', time(), false);
+                return $data;
+            }
+        }
+        return null;
     }
 
     public function import_single_mission($mission_id, $mission_url): void {
         try {
             new ffami_single_mission_import($mission_id, $mission_url);
+            // nach erfolgreichem Import pending entfernen
+            $this->remove_pending($mission_id);
+            ffami_debug_logger::log('Mission Import abgeschlossen', ['id'=>$mission_id,'pending_rest'=>count($this->get_pending())]);
         } catch (\Throwable $e) {
             error_log('FFAMI Scheduler: Fehler beim Einzelimport: ' . $e->getMessage());
         }
@@ -370,8 +433,30 @@ class ffami_scheduler {
         $existing = array_flip($existing ?: []);
         $missing = [];
         foreach ($ids as $mid) {
-            if (!isset($existing[$mid])) { $missing[] = $index[$mid]; }
+            if (!isset($existing[$mid]) && !$this->is_pending($mid)) { $missing[] = $index[$mid]; }
         }
         return $missing;
+    }
+
+    private function get_pending() : array {
+        $p = get_option(self::OPTION_PENDING, []);
+        return is_array($p) ? $p : [];
+    }
+    private function save_pending(array $pending) : void {
+        update_option(self::OPTION_PENDING, array_values(array_unique($pending)), false);
+    }
+    private function is_pending(string $id) : bool {
+        $p = $this->get_pending();
+        return in_array($id, $p, true);
+    }
+    private function add_pending(string $id) : void {
+        $p = $this->get_pending();
+        if (!in_array($id, $p, true)) { $p[] = $id; $this->save_pending($p); }
+    }
+    private function remove_pending(string $id) : void {
+        $p = $this->get_pending();
+        $new = [];
+        foreach ($p as $x) { if ($x !== $id) { $new[] = $x; } }
+        $this->save_pending($new);
     }
 }

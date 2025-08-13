@@ -146,27 +146,30 @@ class ffami_mission {
      * @return void
      */
     public function set_duration(string $duration): void {
-        // 1) Gesamtminuten ermitteln wie gehabt
-        if (preg_match(
-            '/^(?P<h>\d+)\s*h(?:ou?rs?)?[\s,]*(?P<m>\d+)\s*min$/i',
-            $duration,
-            $m
-        )) {
+        $orig = $duration;
+        $duration = trim((string)$duration);
+        $totalMinutes = null;
+        // Varianten erlauben: "2 h 15 min", "2h15min", "45 min", "1 h", "90" (reine Minuten), "2:30" (hh:mm)
+        if (preg_match('/^(?P<h>\d+)\s*h(?:ou?rs?)?[\s,:-]*(?P<m>\d+)\s*m?(?:in)?$/i', $duration, $m)) {
             $totalMinutes = (int)$m['h'] * 60 + (int)$m['m'];
-        } elseif (preg_match('/^(?P<m>\d+)\s*min$/i', $duration, $m)) {
+        } elseif (preg_match('/^(?P<h>\d+)\s*h(?:ou?rs?)?$/i', $duration, $m)) {
+            $totalMinutes = (int)$m['h'] * 60;
+        } elseif (preg_match('/^(?P<m>\d+)\s*m?(?:in)?$/i', $duration, $m)) { // reine Minuten
             $totalMinutes = (int)$m['m'];
-        } else {
-            throw new \InvalidArgumentException("Ungültiges Duration-Format: $duration");
+        } elseif (preg_match('/^(?P<h>\d+):(\s)?(?P<m>\d{1,2})$/', $duration, $m)) { // hh:mm
+            $totalMinutes = (int)$m['h'] * 60 + (int)$m['m'];
         }
 
-        // 2) Stunden und verbleibende Minuten aufteilen
+        if ($totalMinutes === null) {
+            // Fallback: unbekanntes Format -> 0 Minuten, loggen
+            $totalMinutes = 0;
+            if (class_exists('ffami_debug_logger')) {
+                ffami_debug_logger::log('Unbekanntes Duration Format', ['raw'=>$orig]);
+            }
+        }
         $hours       = intdiv($totalMinutes, 60);
         $minutesLeft = $totalMinutes % 60;
-
-        // 3) DateInterval korrekt anlegen
-        $this->duration = new DateInterval(
-            sprintf('PT%dH%dM', $hours, $minutesLeft)
-        );
+        $this->duration = new DateInterval(sprintf('PT%dH%dM', $hours, $minutesLeft));
     }
 
 
@@ -230,14 +233,42 @@ class ffami_mission {
      * @return void
      */
     public function set_vehicles($vehicles): void {
+        $titles = [];
         foreach ($vehicles as $vehicle) {
-            $this->vehicles[] = $vehicle['title'];
+            if (isset($vehicle['title'])) { $titles[] = (string)$vehicle['title']; }
         }
+        sort($titles, SORT_NATURAL | SORT_FLAG_CASE);
+        $this->vehicles = $titles;
     }
 
 
     private function set_md5_hash($mission): void {
-        // Use stable JSON representation for hashing raw mission payload
-        $this->md5_hash = md5(json_encode($mission, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
+        $normalized = $this->normalize_for_hash($mission);
+        $this->md5_hash = md5(json_encode($normalized, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
+    }
+
+    private function normalize_for_hash($data) {
+        $ephemeral = apply_filters('ffami_ephemeral_mission_keys', [
+            'lastModified','lastUpdate','updatedAt','updateDate','fetchedAt','_timestamp','_ts'
+        ]);
+        if (is_array($data)) {
+            // numerische Liste vs. assoziativ unterscheiden
+            $isList = array_keys($data) === range(0, count($data)-1);
+            if ($isList) {
+                $out = [];
+                foreach ($data as $v) { $out[] = $this->normalize_for_hash($v); }
+                return $out; // Reihenfolge beibehalten für Listen (z.B. Bilder)
+            } else {
+                // assoziativ -> flüchtige Keys entfernen und danach ksort für stabile Ordnung
+                $out = [];
+                foreach ($data as $k=>$v) {
+                    if (in_array($k, $ephemeral, true)) { continue; }
+                    $out[$k] = $this->normalize_for_hash($v);
+                }
+                ksort($out, SORT_STRING);
+                return $out;
+            }
+        }
+        return $data;
     }
 }

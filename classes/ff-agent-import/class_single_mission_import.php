@@ -45,7 +45,19 @@ class ffami_single_mission_import {
         $this->fetch_mission_data();
 
         // only import if the mission is new or updated
-        if ($this->is_new_mission() || $this->is_updated_mission()) {
+        $isNew = $this->is_new_mission();
+        $isUpdated = !$isNew && $this->is_updated_mission();
+        if (class_exists('ffami_debug_logger')) {
+            ffami_debug_logger::log('Mission Import Entscheidung', [
+                'id'=>$this->mission->id,
+                'url'=>$this->mission->url,
+                'new'=>$isNew,
+                'updated'=>$isUpdated,
+                'existing_hash'=>$this->existing_post_hash,
+                'new_hash'=>$this->mission->md5_hash
+            ]);
+        }
+        if ($isNew || $isUpdated) {
 
             // Initialize the import process
             $this->import_mission_data();
@@ -202,13 +214,16 @@ class ffami_single_mission_import {
                 $post_arr['ID'] = $this->existing_post_id;
             } else {
                 // No changes -> skip persistence of duplicate content
+                if (class_exists('ffami_debug_logger')) {
+                    ffami_debug_logger::log('Mission unverändert – kein Update', ['id'=>$this->mission->id]);
+                }
                 return $this->existing_post_id;
             }
         }
 
         $post_id = wp_insert_post($post_arr);
 
-        if (is_wp_error($post_id)) {
+    if (is_wp_error($post_id)) {
             error_log('Error creating mission post: ' . $post_id->get_error_message());
             return 0;
         } else {
@@ -219,6 +234,9 @@ class ffami_single_mission_import {
             $this->mission->store_mission_metadata();
 
             //return the post ID
+            if (class_exists('ffami_debug_logger')) {
+                ffami_debug_logger::log('Mission gespeichert', ['id'=>$this->mission->id,'post_id'=>$post_id,'hash'=>$this->mission->md5_hash]);
+            }
             return $post_id;
         }
     }

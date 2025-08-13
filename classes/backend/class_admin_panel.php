@@ -97,19 +97,28 @@ class ffami_admin_panel {
             'fields' => 'ids'
         ]);
         $total = $mission_query->found_posts;
-        $by_year = [];
-        $with_image = 0; $with_title = 0; $with_content = 0;
+    $by_year = [];
+    $with_image = 0; $with_title = 0; $with_content = 0;
+    $cat_totals = ['thl'=>0,'brand'=>0,'fr'=>0,'other'=>0];
         if ($total > 0) {
             foreach ($mission_query->posts as $pid) {
                 $dt = get_post_field('post_date', $pid);
                 $year = substr($dt, 0, 4);
-                if (!isset($by_year[$year])) { $by_year[$year] = ['total'=>0,'image'=>0,'title'=>0,'content'=>0]; }
+        if (!isset($by_year[$year])) { $by_year[$year] = ['total'=>0,'image'=>0,'title'=>0,'content'=>0,'thl'=>0,'brand'=>0,'fr'=>0,'other'=>0]; }
                 $by_year[$year]['total']++;
                 if (has_post_thumbnail($pid)) { $with_image++; $by_year[$year]['image']++; }
                 $t = get_the_title($pid);
                 if ($t) { $with_title++; $by_year[$year]['title']++; }
                 $c = get_post_field('post_content', $pid);
                 if (trim(strip_tags($c)) !== '') { $with_content++; $by_year[$year]['content']++; }
+        $type = get_post_meta($pid, 'ffami_mission_type', true);
+        $norm = mb_strtolower(trim((string)$type));
+        if ($norm === 'technische hilfeleistung') { $cat = 'thl'; }
+        elseif ($norm === 'brand') { $cat = 'brand'; }
+        elseif (strpos($norm, 'first responder') !== false) { $cat = 'fr'; }
+        else { $cat = 'other'; }
+        $by_year[$year][$cat]++;
+        $cat_totals[$cat]++;
             }
         }
 
@@ -119,12 +128,16 @@ class ffami_admin_panel {
         echo '<li>Mit Bild: ' . esc_html($with_image) . '</li>';
         echo '<li>Mit Titel: ' . esc_html($with_title) . '</li>';
         echo '<li>Mit Beschreibung: ' . esc_html($with_content) . '</li>';
+    echo '<li>THL: ' . esc_html($cat_totals['thl']) . '</li>';
+    echo '<li>Brand: ' . esc_html($cat_totals['brand']) . '</li>';
+    echo '<li>First Responder: ' . esc_html($cat_totals['fr']) . '</li>';
+    echo '<li>Sonstige: ' . esc_html($cat_totals['other']) . '</li>';
         echo '</ul>';
 
         if (!empty($by_year)) {
             echo '<h3>Pro Jahr</h3>';
-            echo '<table class="widefat striped" style="max-width:700px">';
-            echo '<thead><tr><th>Jahr</th><th>Gesamt</th><th>Bild</th><th>Titel</th><th>Beschreibung</th></tr></thead><tbody>';
+            echo '<table class="widefat striped" style="max-width:900px">';
+            echo '<thead><tr><th>Jahr</th><th>Gesamt</th><th>Bild</th><th>Titel</th><th>Beschreibung</th><th>THL</th><th>Brand</th><th>First Resp.</th><th>Sonstige</th></tr></thead><tbody>';
             krsort($by_year);
             foreach ($by_year as $year=>$stats) {
                 echo '<tr>';
@@ -133,6 +146,10 @@ class ffami_admin_panel {
                 echo '<td>' . esc_html($stats['image']) . '</td>';
                 echo '<td>' . esc_html($stats['title']) . '</td>';
                 echo '<td>' . esc_html($stats['content']) . '</td>';
+                echo '<td>' . esc_html($stats['thl']) . '</td>';
+                echo '<td>' . esc_html($stats['brand']) . '</td>';
+                echo '<td>' . esc_html($stats['fr']) . '</td>';
+                echo '<td>' . esc_html($stats['other']) . '</td>';
                 echo '</tr>';
             }
             echo '</tbody></table>';
