@@ -26,3 +26,10 @@ require_once FFAMI_PATH . 'classes/class_autoloader.php';
 
 //initialize the plugin
 new ffami_plugin();
+
+// Cron Manager initialisieren
+new ffami_cron();
+
+// Aktivierungs-/Deaktivierungs-Hooks für Cron Registrierung
+register_activation_hook(__FILE__, function() { ffami_cron::activate(); });
+register_deactivation_hook(__FILE__, function() { ffami_cron::deactivate(); });

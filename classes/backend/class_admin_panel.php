@@ -33,9 +33,7 @@ class ffami_admin_panel {
         echo '<input type="submit" name="start_import" value="Import starten">';
         echo '</form>';
 
-        //$mission_import = new ffami_single_mission_import('2025-01-21_20-40-00', '/hpWidget/059B55E0-4FFA-4584-8D40-585DC657C7FB/mission/fc001b25-0f52-4429-952d-38b1350df10d');
-        $mission_import = new ffami_single_mission_import('2025-01-19_20-38-00', '/hpWidget/059B55E0-4FFA-4584-8D40-585DC657C7FB/mission/62a855aa-a62c-4a3f-b76b-f2af5817b7f5');
-        $mission_import = new ffami_single_mission_import('2025-08-12_07-18-00', '/hpWidget/059B55E0-4FFA-4584-8D40-585DC657C7FB/mission/cc4e857a-747d-454e-b3f7-8c922660c22f');
+    // Debug Einzel-Importe entfernt – Cron übernimmt periodischen Import.
 
         //get the content of FFAMI_FILE_MAIN and display it
  /*        $content = file_get_contents(FFAMI_FILE_MAIN);
