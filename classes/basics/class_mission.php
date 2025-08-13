@@ -210,6 +210,8 @@ class ffami_mission {
             $normalized_type = 'Technische Hilfeleistung';
         } elseif ($raw_type !== '' && strcasecmp($raw_type, 'Fire') === 0) {
             $normalized_type = 'Brand';
+        } elseif ($raw_type !== '' && strcasecmp($raw_type, 'Other') === 0) {
+            $normalized_type = 'Sonstiges';
         } else {
             $normalized_type = str_replace('_', ' ', $raw_type);
             $normalized_type = preg_replace('/\s+/', ' ', $normalized_type);
