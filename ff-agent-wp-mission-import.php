@@ -17,7 +17,10 @@ define('FFAMI_URL',                        plugins_url('', FFAMI_FILE));
 define('FFAMI_JS_PATH',                    realpath(FFAMI_PATH) . '/assets/javascript/');
 define('FFAMI_JS_PUBLIC_URL',              FFAMI_URL . '/assets/javascript/');
 
-define('FFAMI_UID',                        '059B55E0-4FFA-4584-8D40-585DC657C7FB');
+// Ursprüngliche Default UID kann leer sein; tatsächliche UID wird als Option gespeichert (ffami_uid)
+if (!defined('FFAMI_UID')) {
+	define('FFAMI_UID', '');
+}
 define('FFAMI_DATA_ROOT',                  'https://pd.service.ff-agent.com');
 define('FFAMI_DATA_PATH',                  'https://pd.service.ff-agent.com/hpWidget/');
 
@@ -26,9 +29,6 @@ require_once FFAMI_PATH . 'classes/class_autoloader.php';
 
 //initialize the plugin
 new ffami_plugin();
-
-// Cron Manager initialisieren
-new ffami_cron();
 
 // Aktivierungs-/Deaktivierungs-Hooks für Cron Registrierung
 register_activation_hook(__FILE__, function() { ffami_cron::activate(); });

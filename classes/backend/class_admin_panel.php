@@ -18,6 +18,25 @@ class ffami_admin_panel {
         );
     }
     public function render_admin_page() {
+        if (!current_user_can('manage_options')) { return; }
+
+        // Verarbeitung des Formulars
+        if (isset($_POST['ffami_widget_submit']) && check_admin_referer('ffami_widget_id_form')) {
+            $new = sanitize_text_field($_POST['widget_id'] ?? '');
+            if ($new) {
+                update_option('ffami_uid', $new, false);
+                // Konstante neu setzen (nur falls noch nicht definiert)
+                // FFAMI_FILE_MAIN neu definieren: dazu evtl. neu initialisieren
+                if (defined('FFAMI_FILE_MAIN')) {
+                    // Alten Wert lassen; nächste Seite lädt vars erneut bei Plugin Boot nur bei Reload.
+                }
+                // Feedback
+                echo '<div class="notice notice-success"><p>Widget ID gespeichert.</p></div>';
+            }
+        }
+
+        $current_uid = get_option('ffami_uid', '');
+        $root_url = $current_uid ? esc_html(FFAMI_DATA_PATH . $current_uid) : '';
         // render a simple admin page with content
         echo '<div class="wrap">';
         echo '<h1>FF Agent WP Mission Import</h1>';
@@ -27,11 +46,17 @@ class ffami_admin_panel {
         //ask for Widget ID
 
         echo '<h2>Widget ID</h2>';
-        echo '<p>Bitte geben Sie die Widget ID ein, um den Import zu starten.</p>';
+        echo '<p>Bitte geben Sie die FF Agent Widget ID ein. Diese steuert den Import.</p>';
         echo '<form method="post" action="">';
-        echo '<input type="text" name="widget_id" placeholder="Widget ID" required>';
-        echo '<input type="submit" name="start_import" value="Import starten">';
+        wp_nonce_field('ffami_widget_id_form');
+        echo '<input type="text" name="widget_id" style="width:400px" value="' . esc_attr($current_uid) . '" placeholder="059B..." required /> ';
+        echo '<input type="submit" class="button button-primary" name="ffami_widget_submit" value="Speichern" />';
         echo '</form>';
+        if ($current_uid) {
+            echo '<p><strong>Aktuelle Root-URL:</strong><br><code>' . $root_url . '</code></p>';
+        } else {
+            echo '<p><em>Noch keine Widget ID gesetzt – Cron-Import inaktiv.</em></p>';
+        }
 
     // Debug Einzel-Importe entfernt – Cron übernimmt periodischen Import.
 

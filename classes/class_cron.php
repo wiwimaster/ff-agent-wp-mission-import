@@ -100,9 +100,13 @@ class ffami_cron {
      * Lädt Root & Jahresdaten, findet Diffs und hängt geänderte Missionen an die Queue an.
      */
     private function update_queue_with_diffs(array &$queue) : void {
-    if (!defined('FFAMI_FILE_MAIN')) { return; }
-    $mainUrl = constant('FFAMI_FILE_MAIN');
-    if (!$mainUrl) { return; }
+        // Root-URL ermitteln: bevorzugt Konstante, sonst Option + Basis-Pfad
+        $mainUrl = defined('FFAMI_FILE_MAIN') ? constant('FFAMI_FILE_MAIN') : '';
+        if (!$mainUrl) {
+            $uid = get_option('ffami_uid', '');
+            if (!$uid) { return; }
+            $mainUrl = FFAMI_DATA_PATH . $uid;
+        }
     $rootPayload = $this->fetch_json($mainUrl);
         if (!$rootPayload) { return; }
         [ $rootData, $rootRaw ] = $rootPayload;

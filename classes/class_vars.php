@@ -5,7 +5,10 @@ class ffami_vars {
 
 
     public function __construct() {
-        $this->define_constant('FFAMI_FILE_MAIN', FFAMI_DATA_PATH . FFAMI_UID);
+        $uid = get_option('ffami_uid', FFAMI_UID);
+        if ($uid) {
+            $this->define_constant('FFAMI_FILE_MAIN', FFAMI_DATA_PATH . $uid);
+        }
     }
 
 
