@@ -77,7 +77,6 @@ class ffami_mission {
         update_post_meta($this->post_id, 'ffami_mission_person_count', $this->person_count);
         update_post_meta($this->post_id, 'ffami_mission_type', $this->mission_type);
         update_post_meta($this->post_id, 'ffami_mission_vehicles', $this->vehicles);
-        // Store hash under both historic and current keys (backward compatibility)
         update_post_meta($this->post_id, 'ffami_mission_hash', $this->md5_hash); // legacy key actually used elsewhere
         update_post_meta($this->post_id, 'ffami_mission_md5_hash', $this->md5_hash); // key referenced by import logic
     }
@@ -214,7 +213,6 @@ class ffami_mission {
         }
 
         $this->mission_type = $normalized_type ?? "";
-        echo $this->mission_type;
     }
 
     public function set_raw_title($title): void {
