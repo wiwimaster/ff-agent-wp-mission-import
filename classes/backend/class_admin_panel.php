@@ -107,8 +107,8 @@ class ffami_admin_panel {
         if (!isset($by_year[$year])) { $by_year[$year] = ['total'=>0,'image'=>0,'title'=>0,'content'=>0,'thl'=>0,'brand'=>0,'fr'=>0,'other'=>0]; }
                 $by_year[$year]['total']++;
                 if (has_post_thumbnail($pid)) { $with_image++; $by_year[$year]['image']++; }
-                $t = get_the_title($pid);
-                if ($t) { $with_title++; $by_year[$year]['title']++; }
+                $raw_t = get_post_meta($pid, 'ffami_mission_title', true);
+                if (trim((string)$raw_t) !== '') { $with_title++; $by_year[$year]['title']++; }
                 $c = get_post_field('post_content', $pid);
                 if (trim(strip_tags($c)) !== '') { $with_content++; $by_year[$year]['content']++; }
         $type = get_post_meta($pid, 'ffami_mission_type', true);
@@ -122,17 +122,7 @@ class ffami_admin_panel {
             }
         }
 
-        echo '<h3>Gesamt</h3>';
-        echo '<ul>';
-        echo '<li>Missionen insgesamt: ' . esc_html($total) . '</li>';
-        echo '<li>Mit Bild: ' . esc_html($with_image) . '</li>';
-        echo '<li>Mit Titel: ' . esc_html($with_title) . '</li>';
-        echo '<li>Mit Beschreibung: ' . esc_html($with_content) . '</li>';
-    echo '<li>THL: ' . esc_html($cat_totals['thl']) . '</li>';
-    echo '<li>Brand: ' . esc_html($cat_totals['brand']) . '</li>';
-    echo '<li>First Responder: ' . esc_html($cat_totals['fr']) . '</li>';
-    echo '<li>Sonstige: ' . esc_html($cat_totals['other']) . '</li>';
-        echo '</ul>';
+    // Gesamtblock entfernt – Summen erscheinen am Tabellenende
 
         if (!empty($by_year)) {
             echo '<h3>Pro Jahr</h3>';
@@ -152,6 +142,18 @@ class ffami_admin_panel {
                 echo '<td>' . esc_html($stats['other']) . '</td>';
                 echo '</tr>';
             }
+            // Summenzeile
+            echo '<tr style="font-weight:bold; background:#f5f5f5">';
+            echo '<td>Summe</td>';
+            echo '<td>' . esc_html($total) . '</td>';
+            echo '<td>' . esc_html($with_image) . '</td>';
+            echo '<td>' . esc_html($with_title) . '</td>';
+            echo '<td>' . esc_html($with_content) . '</td>';
+            echo '<td>' . esc_html($cat_totals['thl']) . '</td>';
+            echo '<td>' . esc_html($cat_totals['brand']) . '</td>';
+            echo '<td>' . esc_html($cat_totals['fr']) . '</td>';
+            echo '<td>' . esc_html($cat_totals['other']) . '</td>';
+            echo '</tr>';
             echo '</tbody></table>';
         }
 
