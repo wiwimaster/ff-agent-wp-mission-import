@@ -152,6 +152,7 @@ class ffami_scheduler {
             $newMissions = $this->collect_missions_generic($yearData);
             $oldMissions = $this->collect_missions_generic($oldData);
             $diff = $this->diff_missions($oldMissions, $newMissions);
+            $removed = $this->removed_missions($oldMissions, $newMissions);
 
             update_option($optKey, $yearMd5, false);
             update_option('ffami_year_json_' . sanitize_key((string)$year), $yearRaw, false);
@@ -179,7 +180,26 @@ class ffami_scheduler {
                     ffami_debug_logger::log('Mission geplant', ['year' => $year, 'id' => $missionId, 'url' => $missionUrl]);
                 }
             }
-            $scanStats[$year] = ['new_count' => count($newMissions), 'old_count' => count($oldMissions), 'diff' => count($diff)];
+            // Entfernte Missionen verarbeiten
+            $removedDeleted = 0;
+            if (!empty($removed)) {
+                foreach ($removed as $mission) {
+                    $missionId = $this->derive_mission_id($mission);
+                    if ($this->delete_mission_post($missionId)) {
+                        $removedDeleted++;
+                        ffami_debug_logger::log('Mission entfernt & gelöscht', ['year'=>$year,'id'=>$missionId]);
+                    } else {
+                        ffami_debug_logger::log('Mission als entfernt erkannt (kein Post gefunden)', ['year'=>$year,'id'=>$missionId]);
+                    }
+                }
+            }
+            $scanStats[$year] = [
+                'new_count' => count($newMissions),
+                'old_count' => count($oldMissions),
+                'diff' => count($diff),
+                'removed' => count($removed),
+                'removed_deleted' => $removedDeleted
+            ];
             ffami_debug_logger::log('Jahr diff Ergebnis', ['year' => $year] + $scanStats[$year]);
         }
         if ($scheduled > 0) {
@@ -389,6 +409,46 @@ class ffami_scheduler {
         if (!empty($entry['id'])) return 'id:' . $entry['id'];
         if (isset($entry['alarmDate'])) return 'ad:' . $entry['alarmDate'];
         return null;
+    }
+
+    /**
+     * Bestimmt Missionen, die im alten Set existieren aber im neuen fehlen.
+     * @param array $old
+     * @param array $new
+     * @return array removed entries (raw arrays from old)
+     */
+    private function removed_missions(array $old, array $new) : array {
+        $oldKeys = [];
+        foreach ($old as $e) { $k = $this->mission_key($e); if ($k) { $oldKeys[$k] = $e; } }
+        if (empty($oldKeys)) { return []; }
+        $newKeys = [];
+        foreach ($new as $e) { $k = $this->mission_key($e); if ($k) { $newKeys[$k] = true; } }
+        $removed = [];
+        foreach ($oldKeys as $k=>$entry) {
+            if (!isset($newKeys[$k])) { $removed[] = $entry; }
+        }
+        return $removed;
+    }
+
+    /**
+     * Löscht den WP Post (force delete) anhand mission_id Meta.
+     * @param string $missionId
+     * @return bool true wenn ein Post gelöscht wurde
+     */
+    private function delete_mission_post(string $missionId) : bool {
+        $q = new WP_Query([
+            'post_type'=>'mission',
+            'meta_query'=>[
+                ['key'=>'ffami_mission_id','value'=>$missionId,'compare'=>'=']
+            ],
+            'posts_per_page'=>1,
+            'fields'=>'ids'
+        ]);
+        if ($q->have_posts()) {
+            $pid = $q->posts[0];
+            return (bool) wp_delete_post($pid, true);
+        }
+        return false;
     }
 
     private function derive_mission_id(array $entry): string {

@@ -58,20 +58,71 @@ class ffami_admin_panel {
             echo '<p><em>Noch keine Widget ID gesetzt – Cron-Import inaktiv.</em></p>';
         }
 
-        // Sofort-Check Button Verarbeitung
+        // Sofort-Check Button Verarbeitung (Full Scan aller Jahre manuell)
         if (isset($_POST['ffami_force_check']) && check_admin_referer('ffami_force_check_action')) {
             $forced = false;
             if (function_exists('as_enqueue_async_action')) {
-                as_enqueue_async_action('ffami_check_years', [], 'ffami');
+                as_enqueue_async_action('ffami_check_years_full', [], 'ffami');
                 $forced = true;
             } else {
-                // Fallback synchron
-                do_action('ffami_check_years');
+                do_action('ffami_check_years_full');
                 $forced = true;
             }
             if ($forced) {
-                echo '<div class="notice notice-success"><p>Prüfung & Planung der geänderten Missionen gestartet.</p></div>';
+                echo '<div class="notice notice-success"><p>Full Scan aller Jahre gestartet.</p></div>';
             }
+        }
+
+        // Reset & Neu-Import Verarbeitung
+    if (isset($_POST['ffami_reset_all']) && check_admin_referer('ffami_reset_all_action')) {
+            $deleted = 0; $attachDeleted = 0;
+            // 1. Alle Mission Posts löschen
+            $all_missions = get_posts(['post_type'=>'mission','numberposts'=>-1,'fields'=>'ids']);
+            foreach ($all_missions as $mid) {
+                // zugehörige Attachments optional mitlöschen (Gallery/Featured)
+                $children = get_children(['post_parent'=>$mid,'post_type'=>'attachment','fields'=>'ids']);
+                foreach ($children as $cid) { if (wp_delete_attachment($cid, true)) { $attachDeleted++; } }
+                if (wp_delete_post($mid, true)) { $deleted++; }
+            }
+            // 2. Optionen / Caches leeren
+            global $wpdb;
+            $likePrefixes = [ 'ffami_year_md5_%','ffami_year_json_%','ffami_year_sample_%','ffami_year_completed_%' ];
+            foreach ($likePrefixes as $pref) {
+                $wpdb->query( $wpdb->prepare("DELETE FROM {$wpdb->options} WHERE option_name LIKE %s", $pref) );
+            }
+            $singleOptions = [
+                'ffami_root_json','ffami_root_md5','ffami_root_sample','ffami_root_fetched_at','ffami_highest_year',
+                'ffami_scan_stats','ffami_last_scheduled','ffami_last_check','ffami_pending_missions'
+            ];
+            foreach ($singleOptions as $opt) { delete_option($opt); }
+            if (class_exists('ffami_debug_logger')) { ffami_debug_logger::clear(); }
+            // 3. Root Refresh + Full Scan neu anstoßen
+            // Immer synchron ausführen, damit sofort neu importiert wird
+            do_action('ffami_refresh_root_years');
+            do_action('ffami_check_years_full');
+            // Zusätzlich asynchron nochmals absichern
+            if (function_exists('as_enqueue_async_action')) {
+                as_enqueue_async_action('ffami_check_years_full', [], 'ffami');
+            }
+            echo '<div class="notice notice-success"><p>Reset durchgeführt: '.esc_html($deleted).' Einsätze (+' . esc_html($attachDeleted) . ' Anhänge) gelöscht. Vollständiger Neu-Import gestartet.</p></div>';
+        }
+
+        // Nur Löschen (Purge) ohne Neuimport
+        if (isset($_POST['ffami_purge_all']) && check_admin_referer('ffami_purge_all_action')) {
+            $deleted = 0; $attachDeleted = 0;
+            $all_missions = get_posts(['post_type'=>'mission','numberposts'=>-1,'fields'=>'ids']);
+            foreach ($all_missions as $mid) {
+                $children = get_children(['post_parent'=>$mid,'post_type'=>'attachment','fields'=>'ids']);
+                foreach ($children as $cid) { if (wp_delete_attachment($cid, true)) { $attachDeleted++; } }
+                if (wp_delete_post($mid, true)) { $deleted++; }
+            }
+            global $wpdb;
+            $likePrefixes = [ 'ffami_year_md5_%','ffami_year_json_%','ffami_year_sample_%','ffami_year_completed_%' ];
+            foreach ($likePrefixes as $pref) { $wpdb->query( $wpdb->prepare("DELETE FROM {$wpdb->options} WHERE option_name LIKE %s", $pref) ); }
+            $singleOptions = [ 'ffami_root_json','ffami_root_md5','ffami_root_sample','ffami_root_fetched_at','ffami_highest_year','ffami_scan_stats','ffami_last_scheduled','ffami_last_check','ffami_pending_missions' ];
+            foreach ($singleOptions as $opt) { delete_option($opt); }
+            if (class_exists('ffami_debug_logger')) { ffami_debug_logger::clear(); }
+            echo '<div class="notice notice-success"><p>Alle Einsatzdaten gelöscht: '.esc_html($deleted).' Einsätze (+' . esc_html($attachDeleted) . ' Anhänge). Kein Neu-Import angestoßen.</p></div>';
         }
 
         // Statusboard
@@ -87,8 +138,20 @@ class ffami_admin_panel {
         // Sofort-Check Formular
         echo '<form method="post" style="margin:15px 0;">';
         wp_nonce_field('ffami_force_check_action');
-        echo '<input type="submit" name="ffami_force_check" class="button button-secondary" value="Jetzt alle aktualisieren (Diff prüfen & Missionen planen)" />';
+    echo '<input type="submit" name="ffami_force_check" class="button button-secondary" value="Full Scan jetzt (alle Jahre prüfen & planen)" />';
         echo '</form>';
+
+    // Reset Button
+    echo '<form method="post" style="margin:5px 0;" onsubmit="return confirm(\'Alle Einsätze und Import-Zwischenspeicher wirklich löschen? Dies kann nicht rückgängig gemacht werden.\');">';
+    wp_nonce_field('ffami_reset_all_action');
+    echo '<input type="submit" name="ffami_reset_all" class="button button-secondary" style="background:#b32d2e; color:#fff; border-color:#b32d2e;" value="Alle Einsätze neu importieren" />';
+    echo '</form>';
+
+    // Purge Button (nur löschen)
+    echo '<form method="post" style="margin:5px 0;" onsubmit="return confirm(\'Alle Einsätze und Import-Zwischenspeicher LÖSCHEN ohne Neu-Import?\');">';
+    wp_nonce_field('ffami_purge_all_action');
+    echo '<input type="submit" name="ffami_purge_all" class="button" style="background:#771d1e; color:#fff; border-color:#771d1e;" value="Alle Einsatzdaten löschen (ohne Neu-Import)" />';
+    echo '</form>';
 
         // Gesamte Missionsstatistik
         $mission_query = new WP_Query([
@@ -161,11 +224,13 @@ class ffami_admin_panel {
         $scan_stats = get_option('ffami_scan_stats', []);
         if (!empty($scan_stats)) {
             echo '<h3>Letzter Scan (Diff-Statistik)</h3>';
-            echo '<table class="widefat striped" style="max-width:600px">';
-            echo '<thead><tr><th>Jahr</th><th>Gefunden</th><th>Vorher</th><th>Diff</th></tr></thead><tbody>';
+            echo '<table class="widefat striped" style="max-width:750px">';
+            echo '<thead><tr><th>Jahr</th><th>Gefunden</th><th>Vorher</th><th>Diff</th><th>Entfernt</th><th>Gelöscht</th></tr></thead><tbody>';
             krsort($scan_stats);
             foreach ($scan_stats as $y=>$st) {
-                echo '<tr><td>'.esc_html($y).'</td><td>'.esc_html($st['new_count']).'</td><td>'.esc_html($st['old_count']).'</td><td>'.esc_html($st['diff']).'</td></tr>';
+                $removed = isset($st['removed']) ? (int)$st['removed'] : 0;
+                $removed_deleted = isset($st['removed_deleted']) ? (int)$st['removed_deleted'] : 0;
+                echo '<tr><td>'.esc_html($y).'</td><td>'.esc_html($st['new_count']).'</td><td>'.esc_html($st['old_count']).'</td><td>'.esc_html($st['diff']).'</td><td>'.esc_html($removed).'</td><td>'.esc_html($removed_deleted).'</td></tr>';
             }
             echo '</tbody></table>';
         }
@@ -223,65 +288,6 @@ class ffami_admin_panel {
             }
             echo '</tbody></table></div>';
         }
-
-    // Debug Einzel-Importe entfernt – Cron übernimmt periodischen Import.
-
-        //get the content of FFAMI_FILE_MAIN and display it
- /*        $content = file_get_contents(FFAMI_FILE_MAIN);
-        if ($content !== false) {
-            echo '<h2>Inhalt von FFAMI_FILE_MAIN</h2>';
-            $data = json_decode($content, true);
-            if (json_last_error() === JSON_ERROR_NONE) {
-                echo '<h2>Parsed JSON</h2>';
-
-
-
-
-                echo '<h2>Parsed JSON und Inhalte der URLs</h2>';
-                if (isset($data['years']) && is_array($data['years'])) {
-                    foreach ($data['years'] as $year => $info) {
-                        echo '<h3>Jahr: ' . htmlspecialchars($year) . '</h3>';
-                        if (isset($info['url'])) {
-                            $url = $info['url'];
-                            // Hier könnte ein absoluter Pfad oder URL aufgebaut werden, falls benötigt.
-                            $urlContent = file_get_contents(FFAMI_DATA_ROOT.$url);
-                            if ($urlContent !== false) {
-
-
-
-                                $urlData = json_decode($urlContent, true);
-                                if (json_last_error() === JSON_ERROR_NONE) {
-                                    echo '<pre>' . print_r($urlData, true) . '</pre>';
-                                } else {
-                                    echo '<div>Fehler beim Parsen des JSON: ' . json_last_error_msg() . '</div>';
-                                }
-
-
-
-
-
-                            } else {
-                                echo '<div>Fehler beim Laden der URL: ' . htmlspecialchars($url) . '</div>';
-                            }
-                        } else {
-                            echo '<div>Keine URL für das Jahr ' . htmlspecialchars($year) . ' vorhanden.</div>';
-                        }
-                    }
-                } else {
-                    echo '<p>Keine Jahr-Daten gefunden.</p>';
-                }
-
-
-
-
-
-            } else {
-                echo '<p>Fehler beim Parsen des JSON Inhalts: ' . json_last_error_msg() . '</p>';
-            }
-        } else {
-            echo '<p>Fehler beim Laden des Inhalts von FFAMI_FILE_MAIN.</p>';
-        }
-        echo '</div>'; */
 
     }
 }
