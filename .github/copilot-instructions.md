@@ -20,7 +20,7 @@ WordPress plugin that imports "Einsatz" (mission) data from the external FF Agen
 ## Import Process (`ffami_single_mission_import`)
 Input: mission ID string (timestamp-like) and mission URL fragment beginning with `/hpWidget/<UID>/mission/<uuid>`.
 Flow:
-1. Build full URL: `FFAMI_DATA_ROOT . $mission->url`; fetch JSON via `file_get_contents` (no WP HTTP API yet).
+1. Build full URL: `FFAMI_DATA_ROOT . $mission->url`; fetch JSON via `wp_remote_get` (timeout 10s, basic error handling / admin notices).
 2. Decode JSON and call `$mission->import_mission_data()` to populate fields + compute MD5 hash of entire raw mission array.
 3. Determine new vs existing:
    - `is_new_mission()` WP_Query on meta key `ffami_mission_id`.
@@ -54,7 +54,7 @@ When modifying, either fix comprehensively with migration strategy or keep consi
 
 ## Extending / Adding Features
 - New import types: follow prefix `ffami_` and place class file under `classes/` (subfolders allowed). Ensure filename matches `class_<name>.php` pattern.
-- Prefer WP HTTP API (`wp_remote_get`) over `file_get_contents` for network calls if adding retries/timeouts.
+- Network: already using `wp_remote_get`; for bulk add caching / transient and maybe retries on `WP_Error`.
 - For batch import, build an index reader using `FFAMI_FILE_MAIN` JSON (structure hinted by commented code in admin panel: expects `years` object with nested URLs). Cache results to avoid repeated remote fetches.
 
 ## Development / Testing Notes
