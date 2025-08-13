@@ -101,13 +101,11 @@ class ffami_image_import {
             return (int) $existing[0];
 
         } else {
-            // 2) Datum verarbeiten
-            $timestamp = $this->mission->datetime ? strtotime($this->mission->datetime) : current_time('timestamp');
-            $use_folders = (bool) get_option('uploads_use_yearmonth_folders', 1);
-
-            // 3) Falls Setting aktiv ist und Datum übergeben wurde, filter hinzufügen
-            if ($use_folders && $date) {
-                $this->current_upload_time = $timestamp;
+            // 2) Datum verarbeiten (nutze Mission-Datetime oder jetzt)
+            $timestamp   = $this->mission->datetime ? strtotime($this->mission->datetime) : current_time('timestamp');
+            $use_folders = (bool) get_option('uploads_use_yearmonth_folders', 1);            
+            if ($use_folders && $timestamp) {
+                $this->current_upload_time = $timestamp; // aktiviert filter_upload_dir_by_date
                 add_filter('upload_dir', array($this, 'filter_upload_dir_by_date'));
             }
 
@@ -133,7 +131,8 @@ class ffami_image_import {
             update_post_meta($attach_id, '_external_image_url', esc_url_raw($thumbnail_url));
 
             // 6) Post-Datum des Attachments setzen
-            if ($date) {
+            // Attachment-Datum anpassen
+            if ($timestamp) {
                 $post_date     = date('Y-m-d H:i:s', $timestamp);
                 $post_date_gmt = get_gmt_from_date($post_date);
                 wp_update_post(array(

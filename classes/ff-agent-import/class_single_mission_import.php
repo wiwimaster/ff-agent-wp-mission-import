@@ -25,6 +25,8 @@ class ffami_single_mission_import {
 
     private string $existing_post_hash = '';
 
+    private int $existing_post_id = 0;
+
 
 
     /**
@@ -77,16 +79,17 @@ class ffami_single_mission_import {
         ];
         $query = new WP_Query($args);
         if ($query->have_posts()) {
-
-            //the_post();
-            $post_id = get_the_ID();
-
-            $this->existing_post_hash = get_post_meta($post_id, 'ffami_mission_md5_hash', true);
-
-            return false;
+            $post = $query->posts[0];
+            $this->existing_post_id = (int)$post->ID;
+            // Read hash from either key (backward compatibility)
+            $hash = get_post_meta($this->existing_post_id, 'ffami_mission_md5_hash', true);
+            if (!$hash) {
+                $hash = get_post_meta($this->existing_post_id, 'ffami_mission_hash', true);
+            }
+            $this->existing_post_hash = (string)$hash;
+            return false; // not new
         }
-
-        return true;
+        return true; // no posts found -> new
     }
 
 
@@ -98,19 +101,11 @@ class ffami_single_mission_import {
      */
     private function is_updated_mission(): bool {
 
-        if (strlen($this->existing_post_hash) > 0) {
-            //check if the md5 hash of the mission data is different from the stored hash
-            $new_hash = md5(serialize($this->mission));
-            if ($new_hash !== $this->existing_post_hash) {
-                return true;
-            } else {
-                return false;
-            }
+        if (strlen($this->existing_post_hash) === 0) {
+            return false; // nothing stored => treat as new elsewhere
         }
-
-        //check if the mission was already imported
-
-        return false;
+        // Compare newly computed mission hash (already set in mission object after fetch)
+        return ($this->mission->md5_hash !== $this->existing_post_hash);
     }
 
 
@@ -121,7 +116,7 @@ class ffami_single_mission_import {
      * @return void
      */
     private function import_mission_data() {
-        $this->save_mission_data($mission_data);
+        $this->save_mission_data();
     }
 
 
@@ -134,19 +129,47 @@ class ffami_single_mission_import {
     private function fetch_mission_data(): bool {
         $url = FFAMI_DATA_ROOT . $this->mission->url;
 
-        $urlContent = file_get_contents($url);
+        $response = wp_remote_get($url, [
+            'timeout'     => 10,
+            'redirection' => 3,
+            'headers'     => [ 'Accept' => 'application/json' ],
+        ]);
 
-        $rawMissionData = json_decode($urlContent, true);
-        if (json_last_error() === JSON_ERROR_NONE) {
-
-            //import mission data into the mission object
-            $this->mission->import_mission_data($rawMissionData);
-
-            return true;
-        } else {
-            echo '<div>Fehler beim Parsen des JSON: ' . json_last_error_msg() . '</div>';
+        if (is_wp_error($response)) {
+            error_log('FFAMI mission fetch error: ' . $response->get_error_message());
+            if (is_admin()) {
+                echo '<div class="notice notice-error"><p>Fehler beim Abrufen der Einsatzdaten: ' . esc_html($response->get_error_message()) . '</p></div>';
+            }
             return false;
         }
+
+        $code = wp_remote_retrieve_response_code($response);
+        if ($code !== 200) {
+            error_log('FFAMI mission fetch HTTP ' . $code . ' for ' . $url);
+            if (is_admin()) {
+                echo '<div class="notice notice-error"><p>Fehler: Server antwortete mit HTTP ' . esc_html((string)$code) . '</p></div>';
+            }
+            return false;
+        }
+
+        $body = wp_remote_retrieve_body($response);
+        if ($body === '') {
+            error_log('FFAMI mission fetch empty body for ' . $url);
+            return false;
+        }
+
+        $rawMissionData = json_decode($body, true);
+        if (json_last_error() !== JSON_ERROR_NONE) {
+            error_log('FFAMI mission JSON decode error: ' . json_last_error_msg());
+            if (is_admin()) {
+                echo '<div class="notice notice-error"><p>Fehler beim Parsen der Einsatzdaten: ' . esc_html(json_last_error_msg()) . '</p></div>';
+            }
+            return false;
+        }
+
+        // Import mission data into the domain object
+        $this->mission->import_mission_data($rawMissionData);
+        return true;
     }
 
 
@@ -173,8 +196,14 @@ class ffami_single_mission_import {
         ];
 
         // If the mission was already imported, update the existing post
-        if ($this->is_updated_mission()) {
-            $post_arr['ID'] = $this->stored_mission->id;
+        if ($this->existing_post_id && !$this->is_new_mission()) {
+            // If it's an update scenario and hashes differ, update existing post
+            if ($this->is_updated_mission()) {
+                $post_arr['ID'] = $this->existing_post_id;
+            } else {
+                // No changes -> skip persistence of duplicate content
+                return $this->existing_post_id;
+            }
         }
 
         $post_id = wp_insert_post($post_arr);
