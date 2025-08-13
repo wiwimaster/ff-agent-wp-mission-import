@@ -91,6 +91,10 @@ class ffami_cron {
         }
         // Rest speichern
         $this->save_queue($queue);
+        // Status speichern
+        update_option('ffami_last_run', current_time('mysql'), false);
+        update_option('ffami_last_run_imported', $imported, false);
+        update_option('ffami_queue_size', count($queue), false);
         if ($imported > 0) {
             error_log('FFAMI Cron: Importiert ' . $imported . ' Mission(en); verbleibend: ' . count($queue));
         }
