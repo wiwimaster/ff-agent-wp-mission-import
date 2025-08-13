@@ -29,7 +29,5 @@ require_once FFAMI_PATH . 'classes/class_autoloader.php';
 
 //initialize the plugin
 new ffami_plugin();
-
-// Aktivierungs-/Deaktivierungs-Hooks für Cron Registrierung
-register_activation_hook(__FILE__, function() { ffami_cron::activate(); });
-register_deactivation_hook(__FILE__, function() { ffami_cron::deactivate(); });
+// Action Scheduler gesteuerter Import
+new ffami_scheduler();

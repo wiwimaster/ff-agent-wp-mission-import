@@ -58,12 +58,37 @@ class ffami_admin_panel {
             echo '<p><em>Noch keine Widget ID gesetzt – Cron-Import inaktiv.</em></p>';
         }
 
+        // Sofort-Check Button Verarbeitung
+        if (isset($_POST['ffami_force_check']) && check_admin_referer('ffami_force_check_action')) {
+            $forced = false;
+            if (function_exists('as_enqueue_async_action')) {
+                as_enqueue_async_action('ffami_check_years', [], 'ffami');
+                $forced = true;
+            } else {
+                // Fallback synchron
+                do_action('ffami_check_years');
+                $forced = true;
+            }
+            if ($forced) {
+                echo '<div class="notice notice-success"><p>Prüfung & Planung der geänderten Missionen gestartet.</p></div>';
+            }
+        }
+
         // Statusboard
         echo '<hr><h2>Status</h2>';
         $last_run = get_option('ffami_last_run', '–');
         $last_count = (int)get_option('ffami_last_run_imported', 0);
         $queue_size = (int)get_option('ffami_queue_size', 0);
         echo '<p>Letzter Cron-Lauf: <strong>' . esc_html($last_run) . '</strong> (importiert: ' . esc_html($last_count) . ', Queue: ' . esc_html($queue_size) . ')</p>';
+        $last_check = get_option('ffami_last_check', '–');
+        $last_scheduled = (int)get_option('ffami_last_scheduled', 0);
+        echo '<p>Letzte Diff-Prüfung: <strong>' . esc_html($last_check) . '</strong>; neu geplante Missionen: ' . esc_html($last_scheduled) . '</p>';
+
+        // Sofort-Check Formular
+        echo '<form method="post" style="margin:15px 0;">';
+        wp_nonce_field('ffami_force_check_action');
+        echo '<input type="submit" name="ffami_force_check" class="button button-secondary" value="Jetzt alle aktualisieren (Diff prüfen & Missionen planen)" />';
+        echo '</form>';
 
         // Gesamte Missionsstatistik
         $mission_query = new WP_Query([
