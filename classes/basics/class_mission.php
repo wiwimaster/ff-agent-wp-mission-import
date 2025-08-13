@@ -13,6 +13,8 @@ class ffami_mission {
 
     public string $title;
 
+    public string $raw_title;
+
     public string $url;
 
     public bool $has_images;
@@ -52,10 +54,11 @@ class ffami_mission {
         $this->set_duration($mission_data['duration']);
         $this->set_location($mission_data['location']);
         $this->set_person_count($mission_data['personCount']);
-        $this->set_mission_type($mission_data['missionType']);
+        $this->set_mission_type($mission_data['type']);
         $this->set_vehicles($mission_data['vehicles']);
         $this->set_title($mission_data['title']);
-        
+        $this->set_raw_title($mission_data['title']);
+
         $this->set_md5_hash($mission_data);
     }
 
@@ -66,6 +69,7 @@ class ffami_mission {
      * @return void
      */
     public function store_mission_metadata() {
+        update_post_meta($this->post_id, 'ffami_mission_title', $this->raw_title);
         update_post_meta($this->post_id, 'ffami_mission_id', $this->id);
         update_post_meta($this->post_id, 'ffami_mission_url', $this->url);
         update_post_meta($this->post_id, 'ffami_mission_duration', $this->duration);
@@ -73,7 +77,9 @@ class ffami_mission {
         update_post_meta($this->post_id, 'ffami_mission_person_count', $this->person_count);
         update_post_meta($this->post_id, 'ffami_mission_type', $this->mission_type);
         update_post_meta($this->post_id, 'ffami_mission_vehicles', $this->vehicles);
-        update_post_meta($this->post_id, 'ffami_mission_hash', $this->md5_hash);
+        // Store hash under both historic and current keys (backward compatibility)
+        update_post_meta($this->post_id, 'ffami_mission_hash', $this->md5_hash); // legacy key actually used elsewhere
+        update_post_meta($this->post_id, 'ffami_mission_md5_hash', $this->md5_hash); // key referenced by import logic
     }
 
 
@@ -84,10 +90,14 @@ class ffami_mission {
      * @return void
      */
     public function set_title($title): void {
-        $this->title = $title ?? "Einsatz " . $this->mission_type . " (" . $this->location . ")";
+        if (isset($title)) {
+            $this->title = $this->mission_type . ' "'.$title.'"' . " (" . $this->location . ")";
+        } else {
+            $this->title = $this->mission_type . " Einsatz " . " (" . $this->location . ")";
+        }
     }
 
-    
+
 
     /**
      * Set the content of the mission
@@ -140,26 +150,24 @@ class ffami_mission {
         // 1) Gesamtminuten ermitteln wie gehabt
         if (preg_match(
             '/^(?P<h>\d+)\s*h(?:ou?rs?)?[\s,]*(?P<m>\d+)\s*min$/i',
-            $duration, $m
+            $duration,
+            $m
         )) {
             $totalMinutes = (int)$m['h'] * 60 + (int)$m['m'];
-        }
-        elseif (preg_match('/^(?P<m>\d+)\s*min$/i', $duration, $m)) {
+        } elseif (preg_match('/^(?P<m>\d+)\s*min$/i', $duration, $m)) {
             $totalMinutes = (int)$m['m'];
-        }
-        else {
+        } else {
             throw new \InvalidArgumentException("Ungültiges Duration-Format: $duration");
         }
-    
+
         // 2) Stunden und verbleibende Minuten aufteilen
         $hours       = intdiv($totalMinutes, 60);
         $minutesLeft = $totalMinutes % 60;
-        
+
         // 3) DateInterval korrekt anlegen
         $this->duration = new DateInterval(
             sprintf('PT%dH%dM', $hours, $minutesLeft)
         );
-    
     }
 
 
@@ -194,9 +202,25 @@ class ffami_mission {
      * @return void
      */
     public function set_mission_type($mission_type): void {
-        $this->mission_type = $mission_type ?? "";
+
+        $raw_type = isset($mission_type) ? trim((string)$mission_type) : '';
+        if ($raw_type !== '' && strcasecmp($raw_type, 'THL') === 0) {
+            $normalized_type = 'Technische Hilfeleistung';
+        } else {
+            $normalized_type = str_replace('_', ' ', $raw_type);
+            $normalized_type = preg_replace('/\s+/', ' ', $normalized_type);
+            $normalized_type = strtolower($normalized_type);
+            $normalized_type = ucwords($normalized_type); // Each word first letter uppercase
+        }
+
+        $this->mission_type = $normalized_type ?? "";
+        echo $this->mission_type;
     }
 
+    public function set_raw_title($title): void {
+        // Store the raw title for later use
+        $this->raw_title = $title ?? "";
+    }
 
 
     /**
@@ -213,6 +237,7 @@ class ffami_mission {
 
 
     private function set_md5_hash($mission): void {
-        $this->md5_hash = md5(serialize($mission));;
+        // Use stable JSON representation for hashing raw mission payload
+        $this->md5_hash = md5(json_encode($mission, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
     }
 }
