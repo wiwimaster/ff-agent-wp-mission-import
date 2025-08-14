@@ -10,22 +10,25 @@
  */
 class ffami_scheduler {
 
-    private const RECURRING_HOOK = 'ffami_check_years';
-    private const FULL_RECURRING_HOOK = 'ffami_check_years_full';
-    private const IMPORT_HOOK    = 'ffami_import_single_mission';
-    private const GROUP          = 'ffami';
-    private const INTERVAL       = 300; // 5 Minuten (Quick Year Scan)
-    private const FULL_INTERVAL  = 604800; // 1 Woche (Full Scan)
-    private const DAILY_INTERVAL = 86400; // 1 Tag (Root Refresh)
-    private const DAILY_ROOT_HOOK = 'ffami_refresh_root_years';
-    private const OPTION_ROOT_MD5 = 'ffami_root_md5';
+    private const RECURRING_HOOK        = 'ffami_check_years';        // Stündlicher Jahres-Scan (aktuelles Jahr)
+    private const RECENT_RECURRING_HOOK = 'ffami_poll_recent_missions'; // Alle 10 Minuten: letzte 5 Missionen direkt pollen
+    private const FULL_RECURRING_HOOK   = 'ffami_check_years_full';   // (Optional) Wöchentlicher Full Scan
+    private const IMPORT_HOOK           = 'ffami_import_single_mission';
+    private const GROUP                 = 'ffami';
+    private const RECENT_INTERVAL       = 600;    // 10 Minuten
+    private const INTERVAL              = 3600;   // 1 Stunde (statt zuvor 5 Minuten)
+    private const FULL_INTERVAL         = 604800; // 1 Woche (Full Scan)
+    private const DAILY_INTERVAL        = 86400;  // 1 Tag (Root Refresh)
+    private const DAILY_ROOT_HOOK       = 'ffami_refresh_root_years';
+    private const OPTION_ROOT_MD5       = 'ffami_root_md5';
 
     private const OPTION_PENDING = 'ffami_pending_missions'; // array of mission_ids currently geplant aber noch nicht abgeschlossen
 
     public function __construct() {
-    add_action(self::RECURRING_HOOK, [$this, 'check_years']); // höchstes Jahr (cached)
-    add_action(self::FULL_RECURRING_HOOK, [$this, 'check_years_full']); // alle Jahre (cached root)
-    add_action(self::DAILY_ROOT_HOOK, [$this, 'refresh_root_years']); // täglicher Root-Fetch
+        add_action(self::RECURRING_HOOK, [$this, 'check_years']); // stündlich aktuelles Jahr
+        add_action(self::RECENT_RECURRING_HOOK, [$this, 'poll_recent_missions']); // alle 10 Minuten letzte 5 Missionen
+        add_action(self::FULL_RECURRING_HOOK, [$this, 'check_years_full']); // alle Jahre (optional wöchentlich)
+        add_action(self::DAILY_ROOT_HOOK, [$this, 'refresh_root_years']); // täglicher Root-Fetch
         add_action(self::IMPORT_HOOK, [$this, 'import_single_mission'], 10, 2);
         add_action('admin_notices', [$this, 'maybe_admin_notice']);
         add_action('plugins_loaded', [$this, 'schedule_recurring'], 20);
@@ -46,8 +49,11 @@ class ffami_scheduler {
         if (! $this->has_uid()) {
             return;
         }
+        if (!as_has_scheduled_action(self::RECENT_RECURRING_HOOK, [], self::GROUP)) {
+            as_schedule_recurring_action(time() + 60, self::RECENT_INTERVAL, self::RECENT_RECURRING_HOOK, [], self::GROUP);
+        }
         if (!as_has_scheduled_action(self::RECURRING_HOOK, [], self::GROUP)) {
-            as_schedule_recurring_action(time() + 90, self::INTERVAL, self::RECURRING_HOOK, [], self::GROUP);
+            as_schedule_recurring_action(time() + 180, self::INTERVAL, self::RECURRING_HOOK, [], self::GROUP);
         }
         if (!as_has_scheduled_action(self::FULL_RECURRING_HOOK, [], self::GROUP)) {
             as_schedule_recurring_action(time() + 300, self::FULL_INTERVAL, self::FULL_RECURRING_HOOK, [], self::GROUP);
@@ -64,6 +70,50 @@ class ffami_scheduler {
 
     public function check_years(): void { // Quick Scan: nur höchstes Jahr aus cache
         $this->run_scan('current_cached');
+    }
+
+    /**
+     * Alle 10 Minuten: letzte 5 Missionen (Detaildateien) direkt pollen.
+     * Vorgehen: aktuelles Jahr laden, Missionsliste sortieren, die neuesten 5 Einzelimporte planen.
+     * Duplicate- und Unverändert-Erkennung übernimmt ffami_single_mission_import selbst via Hash.
+     */
+    public function poll_recent_missions() : void {
+        if (!$this->has_uid()) { return; }
+        $root = $this->get_cached_root_data(true);
+        if (!$root || empty($root['years']) || !is_array($root['years'])) { return; }
+        $highest = $this->get_highest_year($root['years']);
+        if ($highest === null) { return; }
+        $info = $root['years'][$highest] ?? null; if (!$info || empty($info['url'])) { return; }
+        $yearUrl = FFAMI_DATA_ROOT . $info['url'];
+        $payload = $this->fetch_json($yearUrl);
+        if (!$payload) { return; }
+        [ $yearData, $raw ] = $payload;
+        $missions = $this->collect_missions_generic($yearData);
+        if (empty($missions)) { return; }
+        // Sortiere nach alarmDate (ms) desc falls vorhanden, sonst fallback auf detailUrl string
+        usort($missions, function($a,$b){
+            $adA = $a['alarmDate'] ?? 0; $adB = $b['alarmDate'] ?? 0;
+            if ($adA == $adB) { return strcmp(($b['detailUrl']??$b['url']??''), ($a['detailUrl']??$a['url']??'')); }
+            return ($adA < $adB) ? 1 : -1; // desc
+        });
+        $slice = array_slice($missions, 0, 5);
+        $scheduled = 0;
+        foreach ($slice as $mission) {
+            $missionUrl = $mission['detailUrl'] ?? ($mission['url'] ?? null);
+            if (!$missionUrl) { continue; }
+            $missionId = $this->derive_mission_id($mission);
+            if ($this->is_pending($missionId)) { continue; }
+            $args = ['mission_id'=>$missionId,'mission_url'=>$missionUrl];
+            if (function_exists('as_has_scheduled_action') && as_has_scheduled_action(self::IMPORT_HOOK, $args, self::GROUP)) { continue; }
+            if (function_exists('as_enqueue_async_action')) {
+                as_enqueue_async_action(self::IMPORT_HOOK, $args, self::GROUP);
+                $this->add_pending($missionId);
+                $scheduled++;
+            }
+        }
+        if ($scheduled && class_exists('ffami_debug_logger')) {
+            ffami_debug_logger::log('Recent Missions geplant', ['count'=>$scheduled]);
+        }
     }
 
     public function check_years_full(): void { // Weekly full scan
