@@ -85,6 +85,7 @@ class ffami_mission {
      */
     public function set_title($title): void {
         $base = $title ?? '';
+    $base = $this->expand_title_abbreviations($base);
         $parts = array_filter([
             $this->mission_type,
             $base !== '' ? '"' . $base . '"' : null,
@@ -206,8 +207,8 @@ class ffami_mission {
     }
 
     public function set_raw_title($title): void {
-        // Store the raw title for later use
-        $this->raw_title = $title ?? "";
+        $base = $title ?? '';
+        $this->raw_title = $this->expand_title_abbreviations($base);
     }
 
 
@@ -257,6 +258,24 @@ class ffami_mission {
 
     /** Normalisierte Dauer in Minuten. */
     public function get_duration_minutes() : int { return $this->duration_minutes; }
+
+    /** Ersetzt definierte Abkürzungen am Titelanfang (filterbar). */
+    private function expand_title_abbreviations(string $title) : string {
+        if ($title === '') { return $title; }
+        $abbrMap = apply_filters('ffami_title_abbreviation_map', [ 'VU' => 'Verkehrsunfall' ]);
+        if (!is_array($abbrMap)) { return $title; }
+        foreach ($abbrMap as $abbr => $expanded) {
+            $abbr = (string)$abbr; $expanded = (string)$expanded;
+            if ($abbr === '') { continue; }
+            $len = strlen($abbr);
+            if (strncasecmp($title, $abbr, $len) === 0) {
+                $pattern = '/^' . preg_quote($abbr, '/') . '(?=\b|\s)/i';
+                $new = preg_replace($pattern, $expanded, $title, 1);
+                if (is_string($new) && $new !== '') { return $new; }
+            }
+        }
+        return $title;
+    }
 
     /**
      * Rekonstruiert ein Missionsobjekt aus einem bestehenden Post (Meta + Post Felder)
