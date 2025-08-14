@@ -67,31 +67,14 @@ class ffami_single_mission_import {
      * @return bool
      */
     private function is_new_mission(): bool {
-
-        //check if there is a post with the post meta field "ffami_mission_id" and value of $this->mission->id
-        $args = [
-            'post_type'  => 'mission',
-            'meta_query' => [
-                [
-                    'key'     => 'ffami_mission_id',
-                    'value'   => $this->mission->id,
-                    'compare' => '=',
-                ],
-            ],
-        ];
-        $query = new WP_Query($args);
-        if ($query->have_posts()) {
-            $post = $query->posts[0];
-            $this->existing_post_id = (int)$post->ID;
-            // Read hash from either key (backward compatibility)
-            $hash = get_post_meta($this->existing_post_id, 'ffami_mission_md5_hash', true);
-            if (!$hash) {
-                $hash = get_post_meta($this->existing_post_id, 'ffami_mission_hash', true);
-            }
-            $this->existing_post_hash = (string)$hash;
-            return false; // not new
+        $repo = new ffami_mission_repository();
+        $existing = $repo->find_by_mission_id($this->mission->id);
+        if ($existing) {
+            $this->existing_post_id = $existing->post_id;
+            $this->existing_post_hash = $existing->md5_hash;
+            return false;
         }
-        return true; // no posts found -> new
+        return true;
     }
 
 
@@ -185,7 +168,7 @@ class ffami_single_mission_import {
     private function save_mission_data(): int {
 
         // Generate permalink in the format "YYYY-MM-DD_" + post_title
-        $permalink = date('Y-m-d-h-i', strtotime($this->mission->datetime)) . '_' . sanitize_title($this->mission->title);
+    $permalink = date('Y-m-d-h-i', strtotime($this->mission->datetime)) . '_' . sanitize_title($this->mission->title);
 
         // Create a new custom post (type "mission")
         $post_arr = [
@@ -198,7 +181,7 @@ class ffami_single_mission_import {
         ];
 
         // If the mission was already imported, update the existing post
-        if ($this->existing_post_id && !$this->is_new_mission()) {
+    if ($this->existing_post_id) { // is_new_mission() bereits gesetzt earlier
             // If it's an update scenario and hashes differ, update existing post
             if ($this->is_updated_mission()) {
                 $post_arr['ID'] = $this->existing_post_id;

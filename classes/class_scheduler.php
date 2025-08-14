@@ -440,35 +440,8 @@ class ffami_scheduler {
         return $result;
     }
 
-    private function diff_missions(array $old, array $new): array {
-        $oldIndex = [];
-        foreach ($old as $e) {
-            $k = $this->mission_key($e);
-            if ($k) {
-                $oldIndex[$k] = md5(json_encode($e));
-            }
-        }
-        $changed = [];
-        foreach ($new as $e) {
-            $k = $this->mission_key($e);
-            if (!$k) {
-                continue;
-            }
-            $h = md5(json_encode($e));
-            if (!isset($oldIndex[$k]) || $oldIndex[$k] !== $h) {
-                $changed[] = $e;
-            }
-        }
-        return $changed;
-    }
-
-    private function mission_key(array $entry): ?string {
-        if (!empty($entry['detailUrl'])) return (string)$entry['detailUrl'];
-        if (!empty($entry['url'])) return (string)$entry['url'];
-        if (!empty($entry['id'])) return 'id:' . $entry['id'];
-        if (isset($entry['alarmDate'])) return 'ad:' . $entry['alarmDate'];
-        return null;
-    }
+    private function diff_missions(array $old, array $new): array { return ffami_mission_utils::diff_missions($old, $new); }
+    private function mission_key(array $entry): ?string { return ffami_mission_utils::mission_key($entry); }
 
     /**
      * Bestimmt Missionen, die im alten Set existieren aber im neuen fehlen.
@@ -476,18 +449,7 @@ class ffami_scheduler {
      * @param array $new
      * @return array removed entries (raw arrays from old)
      */
-    private function removed_missions(array $old, array $new) : array {
-        $oldKeys = [];
-        foreach ($old as $e) { $k = $this->mission_key($e); if ($k) { $oldKeys[$k] = $e; } }
-        if (empty($oldKeys)) { return []; }
-        $newKeys = [];
-        foreach ($new as $e) { $k = $this->mission_key($e); if ($k) { $newKeys[$k] = true; } }
-        $removed = [];
-        foreach ($oldKeys as $k=>$entry) {
-            if (!isset($newKeys[$k])) { $removed[] = $entry; }
-        }
-        return $removed;
-    }
+    private function removed_missions(array $old, array $new) : array { return ffami_mission_utils::removed_missions($old, $new); }
 
     /**
      * Löscht den WP Post (force delete) anhand mission_id Meta.
@@ -510,20 +472,7 @@ class ffami_scheduler {
         return false;
     }
 
-    private function derive_mission_id(array $entry): string {
-        if (!empty($entry['id'])) {
-            return (string)$entry['id'];
-        }
-        if (isset($entry['alarmDate']) && is_numeric($entry['alarmDate'])) {
-            $ts = (int)($entry['alarmDate'] / 1000);
-            return gmdate('Y-m-d_H-i-s', $ts);
-        }
-        $u = $entry['detailUrl'] ?? ($entry['url'] ?? '');
-        if ($u) {
-            return substr(md5($u), 0, 16);
-        }
-        return uniqid('mission_', true);
-    }
+    private function derive_mission_id(array $entry): string { return ffami_mission_utils::derive_mission_id($entry); }
 
     /**
      * Ermittelt welche Missionen aus einer Liste noch nicht als CPT vorhanden sind.

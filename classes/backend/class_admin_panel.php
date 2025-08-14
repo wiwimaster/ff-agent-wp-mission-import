@@ -8,8 +8,8 @@ class ffami_admin_panel {
 
     public function add_admin_menu() {
         add_menu_page(
-            'FF Agent WP Mission Import',
-            'FF Agent WP Mission Import',
+            __('FF Agent WP Mission Import', 'ffami'),
+            __('FF Agent Mission Import', 'ffami'),
             'manage_options',
             'ffami_admin_panel',
             array($this, 'render_admin_page'),
@@ -39,23 +39,23 @@ class ffami_admin_panel {
         $root_url = $current_uid ? esc_html(FFAMI_DATA_PATH . $current_uid) : '';
         // render a simple admin page with content
         echo '<div class="wrap">';
-        echo '<h1>FF Agent WP Mission Import</h1>';
-        echo '<p>Willkommen im FF Agent WP Mission Import Admin Panel!</p>';
-        echo '<p>Hier können Sie die Einstellungen für den Import von Einsatzdaten von FF Agent nach Wordpress vornehmen.</p>';
+    echo '<h1>' . esc_html__('FF Agent WP Mission Import', 'ffami') . '</h1>';
+    echo '<p>' . esc_html__('Willkommen im FF Agent WP Mission Import Admin Panel!', 'ffami') . '</p>';
+    echo '<p>' . esc_html__('Hier können Sie die Einstellungen für den Import von Einsatzdaten von FF Agent vornehmen.', 'ffami') . '</p>';
     
         //ask for Widget ID
 
-        echo '<h2>Widget ID</h2>';
-        echo '<p>Bitte geben Sie die FF Agent Widget ID ein. Diese steuert den Import.</p>';
+    echo '<h2>' . esc_html__('Widget ID', 'ffami') . '</h2>';
+    echo '<p>' . esc_html__('Bitte geben Sie die FF Agent Widget ID ein. Diese steuert den Import.', 'ffami') . '</p>';
         echo '<form method="post" action="">';
         wp_nonce_field('ffami_widget_id_form');
         echo '<input type="text" name="widget_id" style="width:400px" value="' . esc_attr($current_uid) . '" placeholder="059B..." required /> ';
         echo '<input type="submit" class="button button-primary" name="ffami_widget_submit" value="Speichern" />';
         echo '</form>';
         if ($current_uid) {
-            echo '<p><strong>Aktuelle Root-URL:</strong><br><code>' . $root_url . '</code></p>';
+            echo '<p><strong>' . esc_html__('Aktuelle Root-URL:', 'ffami') . '</strong><br><code>' . $root_url . '</code></p>';
         } else {
-            echo '<p><em>Noch keine Widget ID gesetzt – Cron-Import inaktiv.</em></p>';
+            echo '<p><em>' . esc_html__('Noch keine Widget ID gesetzt – Import inaktiv.', 'ffami') . '</em></p>';
         }
 
         // Sofort-Check Button Verarbeitung (Full Scan aller Jahre manuell)
@@ -126,14 +126,14 @@ class ffami_admin_panel {
         }
 
         // Statusboard
-        echo '<hr><h2>Status</h2>';
+    echo '<hr><h2>' . esc_html__('Status', 'ffami') . '</h2>';
         $last_run = get_option('ffami_last_run', '–');
         $last_count = (int)get_option('ffami_last_run_imported', 0);
         $queue_size = (int)get_option('ffami_queue_size', 0);
-        echo '<p>Letzter Cron-Lauf: <strong>' . esc_html($last_run) . '</strong> (importiert: ' . esc_html($last_count) . ', Queue: ' . esc_html($queue_size) . ')</p>';
+    echo '<p>' . sprintf(esc_html__('Letzter Cron-Lauf: %1$s (importiert: %2$d, Queue: %3$d)', 'ffami'), esc_html($last_run), esc_html($last_count), esc_html($queue_size)) . '</p>';
         $last_check = get_option('ffami_last_check', '–');
         $last_scheduled = (int)get_option('ffami_last_scheduled', 0);
-        echo '<p>Letzte Diff-Prüfung: <strong>' . esc_html($last_check) . '</strong>; neu geplante Missionen: ' . esc_html($last_scheduled) . '</p>';
+    echo '<p>' . sprintf(esc_html__('Letzte Diff-Prüfung: %1$s; neu geplante Missionen: %2$d', 'ffami'), esc_html($last_check), esc_html($last_scheduled)) . '</p>';
 
         // Sofort-Check Formular
         echo '<form method="post" style="margin:15px 0;">';
@@ -188,9 +188,9 @@ class ffami_admin_panel {
     // Gesamtblock entfernt – Summen erscheinen am Tabellenende
 
         if (!empty($by_year)) {
-            echo '<h3>Pro Jahr</h3>';
+            echo '<h3>' . esc_html__('Pro Jahr', 'ffami') . '</h3>';
             echo '<table class="widefat striped" style="max-width:900px">';
-            echo '<thead><tr><th>Jahr</th><th>Gesamt</th><th>Bild</th><th>Titel</th><th>Beschreibung</th><th>THL</th><th>Brand</th><th>First Resp.</th><th>Sonstige</th></tr></thead><tbody>';
+            echo '<thead><tr><th>' . esc_html__('Jahr', 'ffami') . '</th><th>' . esc_html__('Gesamt', 'ffami') . '</th><th>' . esc_html__('Bild', 'ffami') . '</th><th>' . esc_html__('Titel', 'ffami') . '</th><th>' . esc_html__('Beschreibung', 'ffami') . '</th><th>THL</th><th>' . esc_html__('Brand', 'ffami') . '</th><th>' . esc_html__('First Resp.', 'ffami') . '</th><th>' . esc_html__('Sonstige', 'ffami') . '</th></tr></thead><tbody>';
             krsort($by_year);
             foreach ($by_year as $year=>$stats) {
                 echo '<tr>';
@@ -207,7 +207,7 @@ class ffami_admin_panel {
             }
             // Summenzeile
             echo '<tr style="font-weight:bold; background:#f5f5f5">';
-            echo '<td>Summe</td>';
+            echo '<td>' . esc_html__('Summe', 'ffami') . '</td>';
             echo '<td>' . esc_html($total) . '</td>';
             echo '<td>' . esc_html($with_image) . '</td>';
             echo '<td>' . esc_html($with_title) . '</td>';

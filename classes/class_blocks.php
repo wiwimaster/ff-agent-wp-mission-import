@@ -104,8 +104,9 @@ class ffami_blocks {
         if (!empty($filter_types)) {
             $query_args['meta_query'] = [ [ 'key' => 'ffami_mission_type', 'value' => $filter_types, 'compare' => 'IN' ] ];
         }
-        $query = new WP_Query($query_args);
-        if (!$query->have_posts()) {
+    $repo = new ffami_mission_repository();
+    $query = new WP_Query($query_args);
+    if (!$query->have_posts()) {
             return '<div class="ffami-mission-table ffami-empty">Keine Einsätze vorhanden.</div>';
         }
 
@@ -117,42 +118,43 @@ class ffami_blocks {
 
         echo '<table class="ffami-mission-table" style="width:100%; border-collapse:collapse;">';
         // Header
-        $labels = [ 'date'=>'Datum', 'title'=>'Titel', 'type'=>'Typ', 'duration'=>'Dauer', 'persons'=>'Personen', 'location'=>'Ort' ];
+        $labels = [
+            'date'     => __('Datum', 'ffami'),
+            'title'    => __('Titel', 'ffami'),
+            'type'     => __('Typ', 'ffami'),
+            'duration' => __('Dauer', 'ffami'),
+            'persons'  => __('Personen', 'ffami'),
+            'location' => __('Ort', 'ffami')
+        ];
         echo '<thead><tr>';
         foreach ($columns as $c) { if (isset($labels[$c])) echo '<th style="text-align:left;">'.esc_html($labels[$c]).'</th>'; }
         echo '</tr></thead><tbody>';
 
         while ($query->have_posts()) { $query->the_post();
             $pid = get_the_ID();
-            $date = get_post_field('post_date', $pid);
-            $dtFmt = $date ? date_i18n('d.m.Y H:i', strtotime($date)) : '';
-            $rawTitle = get_post_meta($pid, 'ffami_mission_title', true);
-            $type = get_post_meta($pid, 'ffami_mission_type', true);
-            $duration = get_post_meta($pid, 'ffami_mission_duration', true);
-            if ($duration instanceof DateInterval) {
-                $h = $duration->h + ($duration->d * 24); $m = $duration->i; $durationStr = sprintf('%d:%02d h', $h, $m);
-            } else {
-                if (is_string($duration) && preg_match('/PT(\d+)H(\d+)M/', $duration, $mm)) {
-                    $durationStr = $mm[1].':'.str_pad($mm[2],2,'0',STR_PAD_LEFT).' h';
-                } else { $durationStr = ''; }
+            $mission = $repo->get($pid);
+            if (!$mission) { continue; }
+            $dtFmt = $mission->datetime ? date_i18n('d.m.Y H:i', strtotime($mission->datetime)) : '';
+            $durationStr = '';
+            if ($mission->duration_minutes > 0) {
+                $h = intdiv($mission->duration_minutes, 60); $m = $mission->duration_minutes % 60; $durationStr = sprintf('%d:%02d h', $h, $m);
+            } elseif ($mission->duration instanceof DateInterval) {
+                $h = $mission->duration->h + ($mission->duration->d * 24); $m = $mission->duration->i; $durationStr = sprintf('%d:%02d h', $h, $m);
             }
-            $persons = get_post_meta($pid, 'ffami_mission_person_count', true);
-            $location = get_post_meta($pid, 'ffami_mission_location', true);
-            $hasImages = has_post_thumbnail($pid);
-            $contentRaw = trim(strip_tags(get_post_field('post_content', $pid)));
+            $hasImages = $mission->has_images ?? has_post_thumbnail($pid);
+            $contentRaw = trim(strip_tags($mission->content));
             $linkable = $hasImages || $contentRaw !== '';
-            $titleDisplay = $rawTitle !== '' ? $rawTitle : get_the_title($pid);
+            $titleDisplay = $mission->raw_title !== '' ? $mission->raw_title : $mission->title;
             $titleHtml = $linkable ? '<a href="'.esc_url(get_permalink($pid)).'">'.esc_html($titleDisplay).'</a>' : esc_html($titleDisplay);
-
             echo '<tr>';
             foreach ($columns as $col) {
                 switch ($col) {
                     case 'date': echo '<td>'.esc_html($dtFmt).'</td>'; break;
                     case 'title': echo '<td>'.$titleHtml.'</td>'; break;
-                    case 'type': echo '<td>'.esc_html($type).'</td>'; break;
+                    case 'type': echo '<td>'.esc_html($mission->mission_type).'</td>'; break;
                     case 'duration': echo '<td>'.esc_html($durationStr).'</td>'; break;
-                    case 'persons': echo '<td>'.esc_html($persons).'</td>'; break;
-                    case 'location': echo '<td>'.esc_html($location).'</td>'; break;
+                    case 'persons': echo '<td>'.esc_html($mission->person_count).'</td>'; break;
+                    case 'location': echo '<td>'.esc_html($mission->location).'</td>'; break;
                 }
             }
             echo '</tr>';

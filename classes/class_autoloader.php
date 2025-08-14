@@ -6,6 +6,11 @@
  */
 class ffami_autoloader {
     /**
+     * Cache bereits aufgelöster Klassen => Pfad
+     * @var array<string,string|false>
+     */
+    private static array $resolved = [];
+    /**
      * Autoloads the specified class.
      * 
      * @param string $class_name The name of the class to autoload.
@@ -13,6 +18,11 @@ class ffami_autoloader {
      */
     public static function autoload($class_name) {
         if (strpos($class_name, 'ffami_') === 0) {
+            if (isset(self::$resolved[$class_name])) {
+                $cached = self::$resolved[$class_name];
+                if ($cached && file_exists($cached)) { require_once $cached; }
+                return;
+            }
             // Remove the 'ffami_' prefix from the class name
             $class_name = substr($class_name, strlen('ffami_'));
 
@@ -23,8 +33,8 @@ class ffami_autoloader {
             $class_path = __DIR__ . '/' . str_replace('_', '/', $class_file);
 
             if (file_exists($class_path)) {
-                // If the class file exists, require it
                 require_once $class_path;
+                self::$resolved['ffami_' . $class_name] = $class_path;
             } else {
                 // If the class file is not found in the current directory,
                 // search for it recursively in subdirectories
@@ -37,27 +47,24 @@ class ffami_autoloader {
 
                 // Iterate through each directory
                 foreach ($directories as $file) {
-                    if ($file->isDir()) {
-                        // Get the path of the subdirectory
-                        $subdirectory = $file->getPathname();
-
-                        // Generate the class path based on the subdirectory and class file name
-                        $class_path = $subdirectory . '/' . $class_file;
-
-                        if (file_exists($class_path)) {
-                            // If the class file is found in the subdirectory, require it
-                            require_once $class_path;
-                            $file_found = true;
-                            break;
-                        }
+                    if (!$file->isDir()) { continue; }
+                    $subdirectory = $file->getPathname();
+                    $candidate = $subdirectory . '/' . $class_file;
+                    if (file_exists($candidate)) {
+                        require_once $candidate;
+                        $file_found = true;
+                        self::$resolved['ffami_' . $class_name] = $candidate;
+                        break;
                     }
                 }
 
                 if (!$file_found) {
                     // If the class file is not found in any of the subdirectories, log an error and throw an exception
                     $error_message = "Class file not found: $class_file";
-                    error_log($error_message);
-                    throw new \Exception($error_message);
+                    self::$resolved['ffami_' . $class_name] = false; // negative cache
+                    if (defined('WP_DEBUG') && WP_DEBUG) {
+                        error_log($error_message);
+                    }
                 }
             }
         }

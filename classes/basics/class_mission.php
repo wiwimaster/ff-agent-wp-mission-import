@@ -28,6 +28,7 @@ class ffami_mission {
     public string $datetime;
 
     public DateInterval $duration;
+    public int $duration_minutes = 0; // Normalisierter Minutenwert für Queries
 
     public string $location;
 
@@ -72,7 +73,8 @@ class ffami_mission {
         update_post_meta($this->post_id, 'ffami_mission_title', $this->raw_title);
         update_post_meta($this->post_id, 'ffami_mission_id', $this->id);
         update_post_meta($this->post_id, 'ffami_mission_url', $this->url);
-        update_post_meta($this->post_id, 'ffami_mission_duration', $this->duration);
+        update_post_meta($this->post_id, 'ffami_mission_duration', $this->duration); // legacy serialized DateInterval
+        update_post_meta($this->post_id, 'ffami_mission_duration_minutes', $this->duration_minutes);
         update_post_meta($this->post_id, 'ffami_mission_location', $this->location);
         update_post_meta($this->post_id, 'ffami_mission_person_count', $this->person_count);
         update_post_meta($this->post_id, 'ffami_mission_type', $this->mission_type);
@@ -89,11 +91,13 @@ class ffami_mission {
      * @return void
      */
     public function set_title($title): void {
-        if (isset($title)) {
-            $this->title = $this->mission_type . ' "'.$title.'"' . " (" . $this->location . ")";
-        } else {
-            $this->title = $this->mission_type . " Einsatz " . " (" . $this->location . ")";
-        }
+        $base = $title ?? '';
+        $parts = array_filter([
+            $this->mission_type,
+            $base !== '' ? '"' . $base . '"' : null,
+            $this->location !== '' ? '(' . $this->location . ')' : null,
+        ]);
+        $this->title = implode(' ', $parts);
     }
 
 
@@ -105,7 +109,14 @@ class ffami_mission {
      * @return void
      */
     public function set_content($content): void {
-        $this->content = $content ?? "";
+        // Nur zugelassene Grund-Tags erlauben (Filter erweiterbar)
+        $allowed = apply_filters('ffami_allowed_content_tags', [
+            'p' => [], 'br'=>[], 'strong'=>[], 'em'=>[], 'ul'=>[], 'ol'=>[], 'li'=>[], 'a'=>['href'=>[], 'title'=>[]], 'blockquote'=>[]
+        ]);
+        if (is_string($content)) {
+            $clean = wp_kses($content, $allowed);
+        } else { $clean = ''; }
+        $this->content = $clean;
     }
 
 
@@ -167,9 +178,10 @@ class ffami_mission {
                 ffami_debug_logger::log('Unbekanntes Duration Format', ['raw'=>$orig]);
             }
         }
-        $hours       = intdiv($totalMinutes, 60);
-        $minutesLeft = $totalMinutes % 60;
-        $this->duration = new DateInterval(sprintf('PT%dH%dM', $hours, $minutesLeft));
+    $hours       = intdiv($totalMinutes, 60);
+    $minutesLeft = $totalMinutes % 60;
+    $this->duration_minutes = $totalMinutes;
+    $this->duration = new DateInterval(sprintf('PT%dH%dM', $hours, $minutesLeft));
     }
 
 
@@ -206,20 +218,19 @@ class ffami_mission {
     public function set_mission_type($mission_type): void {
 
         $raw_type = isset($mission_type) ? trim((string)$mission_type) : '';
-        if ($raw_type !== '' && strcasecmp($raw_type, 'THL') === 0) {
-            $normalized_type = 'Technische Hilfeleistung';
-        } elseif ($raw_type !== '' && strcasecmp($raw_type, 'Fire') === 0) {
-            $normalized_type = 'Brand';
-        } elseif ($raw_type !== '' && strcasecmp($raw_type, 'Other') === 0) {
-            $normalized_type = 'Sonstiges';
+        $map = [
+            'THL'   => 'Technische Hilfeleistung',
+            'FIRE'  => 'Brand',
+            'OTHER' => 'Sonstiges'
+        ];
+        $upper = strtoupper($raw_type);
+        if (isset($map[$upper])) {
+            $normalized_type = $map[$upper];
         } else {
-            $normalized_type = str_replace('_', ' ', $raw_type);
-            $normalized_type = preg_replace('/\s+/', ' ', $normalized_type);
-            $normalized_type = strtolower($normalized_type);
-            $normalized_type = ucwords($normalized_type);
+            $normalized_type = preg_replace('/\s+/', ' ', str_replace('_',' ', $raw_type));
+            $normalized_type = ucwords(strtolower($normalized_type));
         }
-
-        $this->mission_type = $normalized_type ?? "";
+        $this->mission_type = apply_filters('ffami_normalized_mission_type', $normalized_type, $raw_type, $this);
     }
 
     public function set_raw_title($title): void {
@@ -246,7 +257,8 @@ class ffami_mission {
 
     private function set_md5_hash($mission): void {
         $normalized = $this->normalize_for_hash($mission);
-        $this->md5_hash = md5(json_encode($normalized, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
+        $json = json_encode($normalized, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        $this->md5_hash = md5(apply_filters('ffami_mission_hash_input', $json, $normalized, $this));
     }
 
     private function normalize_for_hash($data) {
@@ -272,5 +284,44 @@ class ffami_mission {
             }
         }
         return $data;
+    }
+
+    /**
+     * Liefert die normalisierte Dauer in Minuten
+     */
+    public function get_duration_minutes() : int { return $this->duration_minutes; }
+
+    /**
+     * Rekonstruiert ein Missionsobjekt aus einem bestehenden Post (Meta + Post Felder)
+     */
+    public static function from_post(int $post_id) : ?self {
+        $post = get_post($post_id);
+        if (!$post || $post->post_type !== 'mission') { return null; }
+        $m = new self();
+        $m->post_id = $post_id;
+        $m->content = $post->post_content;
+        $m->datetime = $post->post_date;
+        $m->raw_title = (string) get_post_meta($post_id, 'ffami_mission_title', true);
+        $m->id = (string) get_post_meta($post_id, 'ffami_mission_id', true);
+        $m->url = (string) get_post_meta($post_id, 'ffami_mission_url', true);
+        $m->location = (string) get_post_meta($post_id, 'ffami_mission_location', true);
+        $m->person_count = (int) get_post_meta($post_id, 'ffami_mission_person_count', true);
+        $m->mission_type = (string) get_post_meta($post_id, 'ffami_mission_type', true);
+        $m->vehicles = (array) get_post_meta($post_id, 'ffami_mission_vehicles', true);
+        $m->md5_hash = (string) (get_post_meta($post_id, 'ffami_mission_md5_hash', true) ?: get_post_meta($post_id, 'ffami_mission_hash', true));
+        $m->duration_minutes = (int) get_post_meta($post_id, 'ffami_mission_duration_minutes', true);
+        if ($m->duration_minutes > 0) {
+            $h = intdiv($m->duration_minutes, 60); $mi = $m->duration_minutes % 60;
+            $m->duration = new DateInterval(sprintf('PT%dH%dM', $h, $mi));
+        } else {
+            $d = get_post_meta($post_id, 'ffami_mission_duration', true);
+            if ($d instanceof DateInterval) { $m->duration = $d; }
+            else { $m->duration = new DateInterval('PT0H0M'); }
+        }
+        // Abgeleitete Felder
+        $m->set_title($m->raw_title);
+        $m->has_images = has_post_thumbnail($post_id);
+        $m->image_urls = []; // nicht rekonstruierbar aus WP direkt
+        return $m;
     }
 }
