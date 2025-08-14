@@ -47,16 +47,6 @@ class ffami_single_mission_import {
         // only import if the mission is new or updated
         $isNew = $this->is_new_mission();
         $isUpdated = !$isNew && $this->is_updated_mission();
-        if (class_exists('ffami_debug_logger')) {
-            ffami_debug_logger::log('Mission Import Entscheidung', [
-                'id'=>$this->mission->id,
-                'url'=>$this->mission->url,
-                'new'=>$isNew,
-                'updated'=>$isUpdated,
-                'existing_hash'=>$this->existing_post_hash,
-                'new_hash'=>$this->mission->md5_hash
-            ]);
-        }
         if ($isNew || $isUpdated) {
 
             // Initialize the import process
@@ -214,9 +204,6 @@ class ffami_single_mission_import {
                 $post_arr['ID'] = $this->existing_post_id;
             } else {
                 // No changes -> skip persistence of duplicate content
-                if (class_exists('ffami_debug_logger')) {
-                    ffami_debug_logger::log('Mission unverändert – kein Update', ['id'=>$this->mission->id]);
-                }
                 return $this->existing_post_id;
             }
         }
