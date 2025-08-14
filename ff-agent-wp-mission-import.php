@@ -14,8 +14,6 @@ define('FFAMI_FILE',                       __FILE__);
 define('FFAMI_PATH',                       realpath(plugin_dir_path(FFAMI_FILE)) . '/');
 define('FFAMI_BASENAME',                   plugin_basename(FFAMI_FILE));
 define('FFAMI_URL',                        plugins_url('', FFAMI_FILE));
-define('FFAMI_JS_PATH',                    realpath(FFAMI_PATH) . '/assets/javascript/');
-define('FFAMI_JS_PUBLIC_URL',              FFAMI_URL . '/assets/javascript/');
 if (!defined('FFAMI_VERSION')) {
 	define('FFAMI_VERSION', '0.1.1');
 }

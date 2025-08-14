@@ -19,9 +19,7 @@ class ffami_single_mission_import {
      */
     private ffami_mission $mission;
 
-    private ffami_mission $stored_mission;
-
-    private array $mission_data = [];
+    // removed unused $stored_mission,$mission_data
 
     private string $existing_post_hash = '';
 
