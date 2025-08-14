@@ -32,6 +32,10 @@ class ffami_scheduler {
         add_action(self::IMPORT_HOOK, [$this, 'import_single_mission'], 10, 2);
         add_action('admin_notices', [$this, 'maybe_admin_notice']);
         add_action('plugins_loaded', [$this, 'schedule_recurring'], 20);
+    // Fallbacks: falls beim ersten Laden Action Scheduler Funktionen noch nicht verfügbar waren
+    add_action('init', [$this, 'ensure_scheduled_late'], 5);
+    add_action('admin_init', [$this, 'ensure_scheduled_late'], 5);
+    add_action('admin_menu', [$this, 'register_debug_page']);
     }
 
     public function maybe_admin_notice() {
@@ -44,22 +48,46 @@ class ffami_scheduler {
 
     public function schedule_recurring() {
         if (!function_exists('as_schedule_recurring_action')) {
+            if (class_exists('ffami_debug_logger')) { ffami_debug_logger::log('schedule_recurring: as_schedule_recurring_action nicht vorhanden'); }
             return;
         }
         if (! $this->has_uid()) {
+            if (class_exists('ffami_debug_logger')) { ffami_debug_logger::log('schedule_recurring: UID fehlt'); }
             return;
         }
         if (!as_has_scheduled_action(self::RECENT_RECURRING_HOOK, [], self::GROUP)) {
             as_schedule_recurring_action(time() + 60, self::RECENT_INTERVAL, self::RECENT_RECURRING_HOOK, [], self::GROUP);
+            if (class_exists('ffami_debug_logger')) { ffami_debug_logger::log('schedule_recurring: RECENT angelegt'); }
         }
         if (!as_has_scheduled_action(self::RECURRING_HOOK, [], self::GROUP)) {
             as_schedule_recurring_action(time() + 180, self::INTERVAL, self::RECURRING_HOOK, [], self::GROUP);
+            if (class_exists('ffami_debug_logger')) { ffami_debug_logger::log('schedule_recurring: RECURRING angelegt'); }
         }
         if (!as_has_scheduled_action(self::FULL_RECURRING_HOOK, [], self::GROUP)) {
             as_schedule_recurring_action(time() + 300, self::FULL_INTERVAL, self::FULL_RECURRING_HOOK, [], self::GROUP);
+            if (class_exists('ffami_debug_logger')) { ffami_debug_logger::log('schedule_recurring: FULL angelegt'); }
         }
         if (!as_has_scheduled_action(self::DAILY_ROOT_HOOK, [], self::GROUP)) {
             as_schedule_recurring_action(time() + 180, self::DAILY_INTERVAL, self::DAILY_ROOT_HOOK, [], self::GROUP);
+            if (class_exists('ffami_debug_logger')) { ffami_debug_logger::log('schedule_recurring: DAILY angelegt'); }
+        }
+    $this->maybe_migrate_intervals();
+    }
+
+    /**
+     * Fallback-Aufruf auf init/admin_init: wenn noch keine Aktionen geplant und Bedingungen erfüllt, erneut versuchen.
+     */
+    public function ensure_scheduled_late() : void {
+        if (!function_exists('as_schedule_recurring_action')) { return; }
+        if (!$this->has_uid()) { return; }
+        // wenn einer der Kern-Hooks fehlt, erneut planen
+        $need = false;
+        foreach ([self::RECENT_RECURRING_HOOK,self::RECURRING_HOOK,self::FULL_RECURRING_HOOK,self::DAILY_ROOT_HOOK] as $h) {
+            if (!as_has_scheduled_action($h, [], self::GROUP)) { $need = true; break; }
+        }
+        if ($need) {
+            if (class_exists('ffami_debug_logger')) { ffami_debug_logger::log('ensure_scheduled_late: versuche erneut Scheduling'); }
+            $this->schedule_recurring();
         }
     }
 
@@ -114,6 +142,130 @@ class ffami_scheduler {
         if ($scheduled && class_exists('ffami_debug_logger')) {
             ffami_debug_logger::log('Recent Missions geplant', ['count'=>$scheduled]);
         }
+    }
+
+    /**
+     * Migration: Falls noch alte 5-Minuten-Recurring Action aktiv ist, unschedulen und neue Stundentakt Action setzen.
+     */
+    private function maybe_migrate_intervals() : void {
+        if (!function_exists('as_next_scheduled_action') || !function_exists('as_unschedule_action')) { return; }
+        $next = as_next_scheduled_action(self::RECURRING_HOOK, [], self::GROUP);
+        if ($next) {
+            $delta = $next - time();
+            // Alte 5-Minuten Aktionen haben meist delta < 1200; neue sollten ~3600 sein (Toleranz: wenn < 1200 => migrieren)
+            if ($delta < 1200) {
+                // alle vorhandenen für Hook entfernen
+                while (as_has_scheduled_action(self::RECURRING_HOOK, [], self::GROUP)) {
+                    as_unschedule_action(self::RECURRING_HOOK, [], self::GROUP);
+                }
+                as_schedule_recurring_action(time() + 180, self::INTERVAL, self::RECURRING_HOOK, [], self::GROUP);
+                if (class_exists('ffami_debug_logger')) {
+                    ffami_debug_logger::log('Scheduler Migration: RECURRING_HOOK auf 1h Intervall umgestellt');
+                }
+            }
+        }
+    }
+
+    /**
+     * Admin Debug Seite (Werkzeuge -> FFAMI Scheduler) mit Übersicht über geplante Aktionen.
+     */
+    public function register_debug_page() : void {
+        if (!current_user_can('manage_options')) { return; }
+        add_management_page('FFAMI Scheduler', 'FFAMI Scheduler', 'manage_options', 'ffami-scheduler', [$this, 'render_debug_page']);
+    }
+
+    public function render_debug_page() : void {
+        if (!function_exists('as_get_scheduled_actions')) {
+            echo '<div class="wrap"><h1>FFAMI Scheduler</h1><p>Action Scheduler nicht verfügbar.</p></div>';
+            return;
+        }
+        $hooks = [
+            self::RECENT_RECURRING_HOOK => 'Letzte 5 (10 Min)',
+            self::RECURRING_HOOK => 'Aktuelles Jahr (1h)',
+            self::FULL_RECURRING_HOOK => 'Vollscan (1 Woche)',
+            self::DAILY_ROOT_HOOK => 'Root Refresh (täglich)'
+        ];
+        echo '<div class="wrap"><h1>FFAMI Scheduler</h1>';
+        if (!$this->has_uid()) {
+            echo '<div class="notice notice-warning"><p>Keine UID gesetzt – Scheduler inaktiv.</p></div>';
+        }
+        echo '<table class="widefat"><thead><tr><th>Hook</th><th>Beschreibung</th><th>Nächste Ausführung</th><th>Pending</th><th>Zuletzt (Complete)</th></tr></thead><tbody>';
+        foreach ($hooks as $hook=>$desc) {
+            $nextTs = function_exists('as_next_scheduled_action') ? as_next_scheduled_action($hook, [], self::GROUP) : 0;
+            $nextStr = $nextTs ? date_i18n('Y-m-d H:i:s', $nextTs) . ' (' . human_time_diff(time(), $nextTs) . ')' : '-';
+            $pending = as_get_scheduled_actions([
+                'hook'=>$hook,
+                'status'=>ActionScheduler_Store::STATUS_PENDING,
+                'group'=>self::GROUP,
+                'per_page'=>50,
+                'orderby'=>'scheduled_date'
+            ]);
+            $complete = as_get_scheduled_actions([
+                'hook'=>$hook,
+                'status'=>ActionScheduler_Store::STATUS_COMPLETE,
+                'group'=>self::GROUP,
+                'per_page'=>1,
+                'orderby'=>'scheduled_date',
+                'order'=>'DESC'
+            ]);
+            $lastComplete = '-';
+            if (is_array($complete) && !empty($complete)) {
+                $first = reset($complete);
+                if (is_object($first) && method_exists($first, 'get_schedule')) {
+                    try {
+                        $schedule = $first->get_schedule();
+                        if ($schedule && method_exists($schedule, 'get_date_gmt')) {
+                            $dtGmt = $schedule->get_date_gmt();
+                            if ($dtGmt instanceof DateTime) {
+                                $ts = $dtGmt->getTimestamp() + (get_option('gmt_offset') * 3600);
+                                $lastComplete = date_i18n('Y-m-d H:i:s', $ts);
+                            }
+                        }
+                    } catch (\Throwable $e) {
+                        $lastComplete = '-';
+                    }
+                }
+            }
+            echo '<tr><td><code>'.esc_html($hook).'</code></td><td>'.esc_html($desc).'</td><td>'.esc_html($nextStr).'</td><td>'.count($pending).'</td><td>'.esc_html($lastComplete).'</td></tr>';
+        }
+        echo '</tbody></table>';
+
+        // Diagnose-Hinweise
+        echo '<h2>Diagnose</h2><ul style="list-style:disc;margin-left:20px;">';
+        if (!$this->has_uid()) {
+            echo '<li>UID nicht gesetzt – ohne UID werden keine wiederkehrenden Aktionen geplant.</li>';
+        } else {
+            echo '<li>UID vorhanden.</li>';
+        }
+        if (!function_exists('as_schedule_recurring_action')) {
+            echo '<li>Funktionen von Action Scheduler nicht geladen zum Prüfzeitpunkt.</li>';
+        } else {
+            echo '<li>Action Scheduler Funktionen verfügbar.</li>';
+        }
+        $missing = [];
+        foreach ([self::RECENT_RECURRING_HOOK,self::RECURRING_HOOK,self::FULL_RECURRING_HOOK,self::DAILY_ROOT_HOOK] as $h) {
+            if (!as_has_scheduled_action($h, [], self::GROUP)) { $missing[] = $h; }
+        }
+        if ($missing) {
+            echo '<li>Nicht geplante Hooks: <code>'.esc_html(implode(', ',$missing)).'</code></li>';
+        } else {
+            echo '<li>Alle Kern-Hooks sind geplant.</li>';
+        }
+        echo '</ul>';
+
+        // Manuelle Planungs-Buttons
+        echo '<h2>Manuell planen</h2><p>Falls nichts geplant wurde, kannst du hier die Recurring Actions sofort anlegen.</p>';
+        echo '<form method="post">';
+        wp_nonce_field('ffami_manual_schedule');
+        echo '<input type="hidden" name="ffami_manual_schedule" value="1" />';
+        echo '<button class="button button-primary">Recurring Actions jetzt anlegen</button>';
+        echo '</form>';
+        if (isset($_POST['ffami_manual_schedule']) && check_admin_referer('ffami_manual_schedule')) {
+            $this->schedule_recurring();
+            echo '<div class="notice notice-success"><p>Scheduling erneut ausgeführt.</p></div>';
+        }
+        echo '<p>Gruppenname: <code>'.esc_html(self::GROUP).'</code></p>';
+        echo '</div>';
     }
 
     public function check_years_full(): void { // Weekly full scan
