@@ -85,13 +85,7 @@ class ffami_mission {
      */
     public function set_title($title): void {
         $base = $title ?? '';
-    $base = $this->expand_title_abbreviations($base);
-        $parts = array_filter([
-            $this->mission_type,
-            $base !== '' ? '"' . $base . '"' : null,
-            $this->location !== '' ? '(' . $this->location . ')' : null,
-        ]);
-        $this->title = implode(' ', $parts);
+        $this->title = $this->expand_title_abbreviations($base);
     }
 
 
@@ -102,11 +96,21 @@ class ffami_mission {
     public function set_content($content): void {
         // Nur zugelassene Grund-Tags erlauben (Filter erweiterbar)
         $allowed = apply_filters('ffami_allowed_content_tags', [
-            'p' => [], 'br'=>[], 'strong'=>[], 'em'=>[], 'ul'=>[], 'ol'=>[], 'li'=>[], 'a'=>['href'=>[], 'title'=>[]], 'blockquote'=>[]
+            'p' => [],
+            'br' => [],
+            'strong' => [],
+            'em' => [],
+            'ul' => [],
+            'ol' => [],
+            'li' => [],
+            'a' => ['href' => [], 'title' => []],
+            'blockquote' => []
         ]);
         if (is_string($content)) {
             $clean = wp_kses($content, $allowed);
-        } else { $clean = ''; }
+        } else {
+            $clean = '';
+        }
         $this->content = $clean;
     }
 
@@ -157,13 +161,13 @@ class ffami_mission {
             // Fallback: unbekanntes Format -> 0 Minuten, loggen
             $totalMinutes = 0;
             if (class_exists('ffami_debug_logger')) {
-                ffami_debug_logger::log('Unbekanntes Duration Format', ['raw'=>$orig]);
+                ffami_debug_logger::log('Unbekanntes Duration Format', ['raw' => $orig]);
             }
         }
-    $hours       = intdiv($totalMinutes, 60);
-    $minutesLeft = $totalMinutes % 60;
-    $this->duration_minutes = $totalMinutes;
-    $this->duration = new DateInterval(sprintf('PT%dH%dM', $hours, $minutesLeft));
+        $hours       = intdiv($totalMinutes, 60);
+        $minutesLeft = $totalMinutes % 60;
+        $this->duration_minutes = $totalMinutes;
+        $this->duration = new DateInterval(sprintf('PT%dH%dM', $hours, $minutesLeft));
     }
 
 
@@ -200,7 +204,7 @@ class ffami_mission {
         if (isset($map[$upper])) {
             $normalized_type = $map[$upper];
         } else {
-            $normalized_type = preg_replace('/\s+/', ' ', str_replace('_',' ', $raw_type));
+            $normalized_type = preg_replace('/\s+/', ' ', str_replace('_', ' ', $raw_type));
             $normalized_type = ucwords(strtolower($normalized_type));
         }
         $this->mission_type = apply_filters('ffami_normalized_mission_type', $normalized_type, $raw_type, $this);
@@ -218,7 +222,9 @@ class ffami_mission {
     public function set_vehicles($vehicles): void {
         $titles = [];
         foreach ($vehicles as $vehicle) {
-            if (isset($vehicle['title'])) { $titles[] = (string)$vehicle['title']; }
+            if (isset($vehicle['title'])) {
+                $titles[] = (string)$vehicle['title'];
+            }
         }
         sort($titles, SORT_NATURAL | SORT_FLAG_CASE);
         $this->vehicles = $titles;
@@ -233,20 +239,30 @@ class ffami_mission {
 
     private function normalize_for_hash($data) {
         $ephemeral = apply_filters('ffami_ephemeral_mission_keys', [
-            'lastModified','lastUpdate','updatedAt','updateDate','fetchedAt','_timestamp','_ts'
+            'lastModified',
+            'lastUpdate',
+            'updatedAt',
+            'updateDate',
+            'fetchedAt',
+            '_timestamp',
+            '_ts'
         ]);
         if (is_array($data)) {
             // numerische Liste vs. assoziativ unterscheiden
-            $isList = array_keys($data) === range(0, count($data)-1);
+            $isList = array_keys($data) === range(0, count($data) - 1);
             if ($isList) {
                 $out = [];
-                foreach ($data as $v) { $out[] = $this->normalize_for_hash($v); }
+                foreach ($data as $v) {
+                    $out[] = $this->normalize_for_hash($v);
+                }
                 return $out; // Reihenfolge beibehalten für Listen (z.B. Bilder)
             } else {
                 // assoziativ -> flüchtige Keys entfernen und danach ksort für stabile Ordnung
                 $out = [];
-                foreach ($data as $k=>$v) {
-                    if (in_array($k, $ephemeral, true)) { continue; }
+                foreach ($data as $k => $v) {
+                    if (in_array($k, $ephemeral, true)) {
+                        continue;
+                    }
                     $out[$k] = $this->normalize_for_hash($v);
                 }
                 ksort($out, SORT_STRING);
@@ -257,21 +273,32 @@ class ffami_mission {
     }
 
     /** Normalisierte Dauer in Minuten. */
-    public function get_duration_minutes() : int { return $this->duration_minutes; }
+    public function get_duration_minutes(): int {
+        return $this->duration_minutes;
+    }
 
     /** Ersetzt definierte Abkürzungen am Titelanfang (filterbar). */
-    private function expand_title_abbreviations(string $title) : string {
-        if ($title === '') { return $title; }
-        $abbrMap = apply_filters('ffami_title_abbreviation_map', [ 'VU' => 'Verkehrsunfall' ]);
-        if (!is_array($abbrMap)) { return $title; }
+    private function expand_title_abbreviations(string $title): string {
+        if ($title === '') {
+            return $title;
+        }
+        $abbrMap = apply_filters('ffami_title_abbreviation_map', ['VU' => 'Verkehrsunfall']);
+        if (!is_array($abbrMap)) {
+            return $title;
+        }
         foreach ($abbrMap as $abbr => $expanded) {
-            $abbr = (string)$abbr; $expanded = (string)$expanded;
-            if ($abbr === '') { continue; }
+            $abbr = (string)$abbr;
+            $expanded = (string)$expanded;
+            if ($abbr === '') {
+                continue;
+            }
             $len = strlen($abbr);
             if (strncasecmp($title, $abbr, $len) === 0) {
                 $pattern = '/^' . preg_quote($abbr, '/') . '(?=\b|\s)/i';
                 $new = preg_replace($pattern, $expanded, $title, 1);
-                if (is_string($new) && $new !== '') { return $new; }
+                if (is_string($new) && $new !== '') {
+                    return $new;
+                }
             }
         }
         return $title;
@@ -280,9 +307,11 @@ class ffami_mission {
     /**
      * Rekonstruiert ein Missionsobjekt aus einem bestehenden Post (Meta + Post Felder)
      */
-    public static function from_post(int $post_id) : ?self {
+    public static function from_post(int $post_id): ?self {
         $post = get_post($post_id);
-        if (!$post || $post->post_type !== 'mission') { return null; }
+        if (!$post || $post->post_type !== 'mission') {
+            return null;
+        }
         $m = new self();
         $m->post_id = $post_id;
         $m->content = $post->post_content;
@@ -297,12 +326,16 @@ class ffami_mission {
         $m->md5_hash = (string) (get_post_meta($post_id, 'ffami_mission_md5_hash', true) ?: get_post_meta($post_id, 'ffami_mission_hash', true));
         $m->duration_minutes = (int) get_post_meta($post_id, 'ffami_mission_duration_minutes', true);
         if ($m->duration_minutes > 0) {
-            $h = intdiv($m->duration_minutes, 60); $mi = $m->duration_minutes % 60;
+            $h = intdiv($m->duration_minutes, 60);
+            $mi = $m->duration_minutes % 60;
             $m->duration = new DateInterval(sprintf('PT%dH%dM', $h, $mi));
         } else {
             $d = get_post_meta($post_id, 'ffami_mission_duration', true);
-            if ($d instanceof DateInterval) { $m->duration = $d; }
-            else { $m->duration = new DateInterval('PT0H0M'); }
+            if ($d instanceof DateInterval) {
+                $m->duration = $d;
+            } else {
+                $m->duration = new DateInterval('PT0H0M');
+            }
         }
         // Abgeleitete Felder
         $m->set_title($m->raw_title);
