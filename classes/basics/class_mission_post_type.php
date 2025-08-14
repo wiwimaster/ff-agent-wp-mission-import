@@ -1,6 +1,7 @@
 <?php
 
 
+/** Registriert den Custom Post Type 'mission'. */
 class ffami_mission_post_type {
 
     public function __construct() {

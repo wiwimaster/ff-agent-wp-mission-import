@@ -2,12 +2,12 @@
 
 /**
  * Plugin Name: FF Agent WP Mission Import
- * Plugin URI: https://github.com/wiwimaster/ff-agent-wp-mission-import
- * Description: Importiert Einsatzdaten von FF Agent nach Wordpress.
- * Version: 0.1
- * Author: Jan Runge
- * Author URI: https://github.com/wiwimaster
- * License: GPLv3
+ * Plugin URI:  https://github.com/wiwimaster/ff-agent-wp-mission-import
+ * Description: Importiert Einsatzdaten (Einsätze) aus FF Agent in einen Custom Post Type.
+ * Version:     0.1.1
+ * Author:      Jan Runge
+ * Author URI:  https://github.com/wiwimaster
+ * License:     GPLv3
  */
 
 define('FFAMI_FILE',                       __FILE__);

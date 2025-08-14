@@ -1,6 +1,7 @@
 <?php
 
 
+/** Setzt dynamische / abgeleitete Konstanten (z.B. FFAMI_FILE_MAIN). */
 class ffami_vars {
 
 

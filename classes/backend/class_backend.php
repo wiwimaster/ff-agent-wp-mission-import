@@ -1,5 +1,8 @@
 <?php
 
+/**
+ * Initialisiert Admin-spezifische Komponenten.
+ */
 class ffami_backend {
 
     private ffami_admin_panel $admin_panel;

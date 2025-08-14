@@ -2,16 +2,12 @@
 
 class ffami_mission_repository {
 
-    /**
-     * Hole Mission anhand CPT ID als Objekt.
-     */
+    /** Einzelne Mission über CPT-ID laden. */
     public function get(int $post_id) : ?ffami_mission {
         return ffami_mission::from_post($post_id);
     }
 
-    /**
-     * Finde Mission über mission_id Meta.
-     */
+    /** Mission anhand ffami_mission_id Meta finden. */
     public function find_by_mission_id(string $mission_id) : ?ffami_mission {
         $q = new WP_Query([
             'post_type' => 'mission',
@@ -24,8 +20,9 @@ class ffami_mission_repository {
     }
 
     /**
-     * Liefert Liste ffami_mission Objekte (paged) gemäß Argumenten.
-     * Args: per_page, paged, year, types (array), order, orderby
+     * Sucht Missionen mit optionalen Filtern (Jahr, Typen) und liefert
+     * Objektliste + Gesamtzahlen zurück.
+     * Parameter: per_page, paged, year, types[], order, orderby.
      */
     public function query(array $args = []) : array {
         $defaults = [

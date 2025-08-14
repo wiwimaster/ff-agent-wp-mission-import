@@ -1,8 +1,10 @@
 <?php
 /**
- * Class autoloader
- * 
- * This class provides an autoloading mechanism for the bmg_plugin namespace.
+ * Autoloader für alle Klassen mit Präfix ffami_.
+ *
+ * Sucht die entsprechende Datei (Namensschema class_<teil>.php) zunächst
+ * direkt, anschließend rekursiv. Gefundene Pfade werden gecached, nicht
+ * gefundene (false) ebenfalls, um wiederholte teure Directory-Scans zu vermeiden.
  */
 class ffami_autoloader {
     /**
@@ -11,10 +13,9 @@ class ffami_autoloader {
      */
     private static array $resolved = [];
     /**
-     * Autoloads the specified class.
-     * 
-     * @param string $class_name The name of the class to autoload.
-     * @throws \Exception If the class file is not found.
+     * Lädt eine Klasse mit Präfix ffami_. Andere Namen werden ignoriert.
+     *
+     * @param string $class_name Vollständiger Klassenname.
      */
     public static function autoload($class_name) {
         if (strpos($class_name, 'ffami_') === 0) {

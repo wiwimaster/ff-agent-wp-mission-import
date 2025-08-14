@@ -1,12 +1,8 @@
 <?php
 
 /**
- * Class for importing a single mission from the FF Agent API
- *
- * This class handles the import of a single mission from the FF Agent API.
- * It fetches the mission data, processes it, and saves it as a custom post in WordPress.
- *
- * @package ffami
+ * Einzel-Import einer Mission von der FF Agent API.
+ * Lädt Detail-JSON, parst in ffami_mission und legt/aktualisiert den CPT.
  */
 class ffami_single_mission_import {
 
@@ -28,10 +24,8 @@ class ffami_single_mission_import {
 
 
     /**
-     * Constructor for the ffami_single_mission_import class
-     *
-     * @param string $mission_id The ID of the mission to import
-     * @param string $mission_url The URL of the mission to import
+     * @param string $mission_id Interne/abgeleitete Einsatz-ID
+     * @param string $mission_url Relativer API-Pfad (beginnend mit /hpWidget/...)
      */
     public function __construct($mission_id, $mission_url) {
 
@@ -39,18 +33,17 @@ class ffami_single_mission_import {
         $this->mission->id = $mission_id;
         $this->mission->url = $mission_url;
 
-        // Fetch the mission data from the FF Agent API
+        // 1. Daten abrufen
         $this->fetch_mission_data();
 
-        // only import if the mission is new or updated
+        // 2. Neu oder geändert?
         $isNew = $this->is_new_mission();
         $isUpdated = !$isNew && $this->is_updated_mission();
         if ($isNew || $isUpdated) {
-
-            // Initialize the import process
+            // 3. Speichern
             $this->import_mission_data();
 
-            //add images to the post
+            // 4. Bilder
             if ($this->mission->has_images) {
                 new ffami_image_import($this->mission);
             }
@@ -59,11 +52,7 @@ class ffami_single_mission_import {
 
 
 
-    /**
-     * Check if the mission is new or already imported
-     *
-     * @return bool
-     */
+    /** Prüft, ob Einsatz-ID bereits existiert. */
     private function is_new_mission(): bool {
         $repo = new ffami_mission_repository();
         $existing = $repo->find_by_mission_id($this->mission->id);
@@ -77,11 +66,7 @@ class ffami_single_mission_import {
 
 
 
-    /**
-     * Check if the mission was updated
-     *
-     * @return mixed post_id if the mission was already imported, false if not
-     */
+    /** Prüft anhand Hash auf Datenänderung. */
     private function is_updated_mission(): bool {
 
         if (strlen($this->existing_post_hash) === 0) {
@@ -93,22 +78,14 @@ class ffami_single_mission_import {
 
 
 
-    /**
-     * Import the mission data from the FF Agent API
-     *
-     * @return void
-     */
+    /** Durchführen (Speichern) des Imports. */
     private function import_mission_data() {
         $this->save_mission_data();
     }
 
 
 
-    /**
-     * Does the nitty-gritty of fetching the mission data from the FF Agent API
-     *
-     * @return array|false
-     */
+    /** Lädt die JSON Detaildaten und befüllt das Missionsobjekt. */
     private function fetch_mission_data(): bool {
         $url = FFAMI_DATA_ROOT . $this->mission->url;
 
@@ -157,12 +134,7 @@ class ffami_single_mission_import {
 
 
 
-    /**
-     * Save the mission data as a custom post in WordPress and store the metadata
-     *
-     * @param array $mission_data
-     * @return int post ID of the created or updated post
-     */
+    /** CPT (neu oder Update) speichern + Metadaten schreiben. */
     private function save_mission_data(): int {
 
         // Generate permalink in the format "YYYY-MM-DD_" + post_title

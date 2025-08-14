@@ -1,11 +1,13 @@
 <?php
 
+/**
+ * Admin Oberfläche: Konfiguration (Widget ID), Statusanzeigen, Wartungsaktionen.
+ */
 class ffami_admin_panel {
-
-    public function __construct() {
-    }
+    public function __construct() {}
 
 
+    /** Menü-Eintrag registrieren. */
     public function add_admin_menu() {
         add_menu_page(
             __('FF Agent WP Mission Import', 'ffami'),
@@ -17,6 +19,7 @@ class ffami_admin_panel {
             6
         );
     }
+    /** Hauptseite rendern. */
     public function render_admin_page() {
         if (!current_user_can('manage_options')) { return; }
 

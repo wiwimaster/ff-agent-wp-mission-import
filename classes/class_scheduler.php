@@ -1,12 +1,14 @@
 <?php
 
 /**
- * Action Scheduler gesteuerter Import.
+ * Import-/Abgleich-Logik über Action Scheduler.
  *
- * - Alle 5 Minuten: Root + Jahresdateien prüfen (Hook: ffami_check_years)
- * - Für geänderte / neue Missionen: Einzel-Import Aktionen (Hook: ffami_import_single_mission)
- *
- * Soft Dependency: Action Scheduler (Plugin oder Bestandteil anderer Plugins wie WooCommerce).
+ * Periodische Tasks:
+ * - ffami_poll_recent_missions: schnelle Polling der letzten Missionen
+ * - ffami_check_years: aktuelles Jahr differenziell scannen
+ * - ffami_check_years_full: vollständiger Jahresscan
+ * - ffami_refresh_root_years: Root-Datei / Jahrübersicht aktualisieren
+ * - ffami_import_single_mission: Einzelimport Worker
  */
 class ffami_scheduler {
 
@@ -322,9 +324,7 @@ class ffami_scheduler {
         }
     }
 
-    /**
-     * Falls jemand noch die alte Debug-URL aufruft, sanft umleiten.
-     */
+    /** Alte Debug-URL blockieren (Rückwärtskompatibilität). */
     public function block_old_debug_page() : void {
         if (!is_admin()) { return; }
         if (isset($_GET['page']) && $_GET['page'] === 'ffami-scheduler') {

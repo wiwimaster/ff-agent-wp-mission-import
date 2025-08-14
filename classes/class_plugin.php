@@ -1,6 +1,9 @@
 <?php
 
 
+/**
+ * Bootstrap des Plugins (Registrierung CPT, Backend, Blöcke, Variablen).
+ */
 class ffami_plugin {
 
     public function __construct() {

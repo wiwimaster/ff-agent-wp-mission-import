@@ -1,11 +1,10 @@
 <?php
 
 /**
- * Class for representing a mission
+ * Domänenobjekt für einen Einsatz (Mission).
  *
- * This class handles the properties and methods related to a mission.
- *
- * @package ffami
+ * Kapselt Rohdaten der API sowie abgeleitete Felder (Titel, Hash, Dauer etc.).
+ * Enthält Parser für die API-JSON Struktur und speichert Metadaten am WP-Post.
  */
 class ffami_mission {
 
@@ -43,10 +42,8 @@ class ffami_mission {
 
 
     /**
-     * Processes the mission data and sets the properties
-     *
-     * @param array $mission_data
-     * @return void
+     * Übernimmt Rohdaten (assoziatives Array der API) und befüllt das Objekt.
+     * Erwartet vorhandene Schlüssel analog zur FF-Agent API.
      */
     public function import_mission_data($mission_data) {
         $this->set_content($mission_data['detail']);
@@ -65,9 +62,8 @@ class ffami_mission {
 
 
     /**
-     * Store the mission metadata in the post
-     *
-     * @return void
+     * Speichert alle relevanten Eigenschaften als Post Meta.
+     * Schreibt sowohl neue als auch legacy Meta-Keys (Hash-Kompatibilität).
      */
     public function store_mission_metadata() {
         update_post_meta($this->post_id, 'ffami_mission_title', $this->raw_title);
@@ -85,10 +81,7 @@ class ffami_mission {
 
 
     /**
-     * Set the title of the mission
-     *
-     * @param string $title Title of the mission
-     * @return void
+     * Titel setzen (kombiniert Typ, Roh-Titel und Ort, sofern vorhanden).
      */
     public function set_title($title): void {
         $base = $title ?? '';
@@ -103,10 +96,7 @@ class ffami_mission {
 
 
     /**
-     * Set the content of the mission
-     *
-     * @param string $content Content of the mission
-     * @return void
+     * Einsatz-Beschreibung filtern (nur erlaubte HTML-Tags via wp_kses).
      */
     public function set_content($content): void {
         // Nur zugelassene Grund-Tags erlauben (Filter erweiterbar)
@@ -122,10 +112,7 @@ class ffami_mission {
 
 
     /**
-     * Set the datetime of the mission
-     *
-     * @param int $datetime Datetime in milliseconds since epoch
-     * @return void
+     * Zeitstempel übernehmen (ms seit Epoch) -> MySQL Format.
      */
     public function set_datetime($datetime): void {
         $this->datetime = isset($datetime)
@@ -135,11 +122,8 @@ class ffami_mission {
 
 
 
-    /*
-     * Set the image URLs
-     *
-     * @param array $image_urls Array of image URLs
-     * @return void
+    /**
+     * Bild-URL Liste setzen und Flag has_images bestimmen.
      */
     public function set_image_urls($image_urls): void {
         $this->image_urls = $image_urls ?? [];
@@ -151,10 +135,7 @@ class ffami_mission {
 
 
     /**
-     * Set the duration of the mission
-     *
-     * @param string $duration Duration in format "1 hour 30 minutes"
-     * @return void
+     * Dauer parsen; unterstützt mehrere Formate und speichert Minuten + DateInterval.
      */
     public function set_duration(string $duration): void {
         $orig = $duration;
@@ -186,10 +167,7 @@ class ffami_mission {
 
 
     /**
-     * Set the location of the mission
-     *
-     * @param string $location Location of the mission
-     * @return void
+     * Ort bereinigen (entfernt Platzhaltertexte).
      */
     public function set_location($location): void {
         $this->location = $location ? str_replace(" -- Default ORT ---", "", $location) : "";
@@ -198,10 +176,7 @@ class ffami_mission {
 
 
     /**
-     * Set the person count of the mission
-     *
-     * @param int $person_count Person count of the mission
-     * @return void
+     * Anzahl beteiligter Personen.
      */
     public function set_person_count($person_count): void {
         $this->person_count = isset($person_count) ? (int)$person_count : 0;
@@ -210,10 +185,7 @@ class ffami_mission {
 
 
     /**
-     * Set the mission type
-     *
-     * @param string $mission_type Mission type of the mission
-     * @return void
+     * Typ normalisieren (Mapping + Formatierung) – filterbar.
      */
     public function set_mission_type($mission_type): void {
 
@@ -240,10 +212,7 @@ class ffami_mission {
 
 
     /**
-     * Set the vehicles involved in the mission
-     *
-     * @param array $vehicles Array of vehicles
-     * @return void
+     * Fahrzeugliste extrahieren (Titel sortiert, case-insensitiv).
      */
     public function set_vehicles($vehicles): void {
         $titles = [];
@@ -286,9 +255,7 @@ class ffami_mission {
         return $data;
     }
 
-    /**
-     * Liefert die normalisierte Dauer in Minuten
-     */
+    /** Normalisierte Dauer in Minuten. */
     public function get_duration_minutes() : int { return $this->duration_minutes; }
 
     /**

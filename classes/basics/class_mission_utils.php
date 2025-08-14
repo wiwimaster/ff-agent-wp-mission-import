@@ -2,6 +2,7 @@
 
 class ffami_mission_utils {
 
+    /** Schlüssel für Diff / Identifikation aus Roh-Eintrag ableiten. */
     public static function mission_key(array $entry) : ?string {
         if (!empty($entry['detailUrl'])) return (string)$entry['detailUrl'];
         if (!empty($entry['url'])) return (string)$entry['url'];
@@ -10,6 +11,7 @@ class ffami_mission_utils {
         return null;
     }
 
+    /** Interne Missions-ID ableiten (Meta ffami_mission_id). */
     public static function derive_mission_id(array $entry) : string {
         if (!empty($entry['id'])) { return (string)$entry['id']; }
         if (isset($entry['alarmDate']) && is_numeric($entry['alarmDate'])) {
@@ -21,6 +23,7 @@ class ffami_mission_utils {
         return uniqid('mission_', true);
     }
 
+    /** Geänderte oder neue Einträge zwischen alt/neu bestimmen. */
     public static function diff_missions(array $old, array $new) : array {
         $oldIndex = [];
         foreach ($old as $e) {
@@ -37,6 +40,7 @@ class ffami_mission_utils {
         return $changed;
     }
 
+    /** Entfernte Einträge bestimmen (in alt, nicht in neu). */
     public static function removed_missions(array $old, array $new) : array {
         $oldKeys = [];
         foreach ($old as $e) { $k = self::mission_key($e); if ($k) { $oldKeys[$k] = $e; } }

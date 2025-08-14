@@ -1,4 +1,5 @@
 <?php
+/** Einfache persistente Debug-Log Ablage (Option-basierter Ringpuffer). */
 class ffami_debug_logger {
     private const OPTION = 'ffami_debug_log';
     private const OPTION_VERBOSE = 'ffami_debug_verbose';

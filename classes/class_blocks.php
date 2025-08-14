@@ -1,5 +1,8 @@
 <?php
 
+/**
+ * Registriert und rendert Gutenberg Block für Einsatzliste.
+ */
 class ffami_blocks {
     public function __construct() {
         add_action('init', [$this, 'register_blocks']);
@@ -41,6 +44,9 @@ class ffami_blocks {
         );
     }
 
+    /**
+     * Serverseitiges Rendern der Einsatztabelle anhand Block-Attribute.
+     */
     public function render_latest_missions_table($attributes = [], $content = '') : string {
         // Unified per-page setting (fall back to legacy keys if present)
         $per_page = isset($attributes['perPage']) ? (int)$attributes['perPage'] : ( isset($attributes['pageSize']) ? (int)$attributes['pageSize'] : ( isset($attributes['limit']) ? (int)$attributes['limit'] : 20 ) );
@@ -169,6 +175,9 @@ class ffami_blocks {
         return ob_get_clean();
     }
 
+    /**
+     * Paginierungs-Navigation ausgeben (Modi: simple | year).
+     */
     private function render_pagination_nav($mode, $pagination_id, $current_page, $page_var, $year_var, $years, $selected_year, $query) : void {
         $total_pages = (int)$query->max_num_pages;
         if ($total_pages < 2) { return; }

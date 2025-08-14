@@ -1,6 +1,9 @@
 <?php
 
 
+/**
+ * Importiert und hängt Einsatzbilder an den Mission-Post (Thumbnail + Galerie).
+ */
 class ffami_image_import {
 
     private ffami_mission $mission;
@@ -15,11 +18,7 @@ class ffami_image_import {
 
 
 
-     /**
-     * Process and attach images to the post
-     *
-     * @return void
-     */
+    /** Bilder verarbeiten und anhängen. */
     private function process_mission_images() {
 
         require_once(ABSPATH . 'wp-admin/includes/image.php');
@@ -63,14 +62,7 @@ class ffami_image_import {
 
 
 
-    /**
-     * Importiert ein Bild von einer URL in die Mediathek und hängt es an den Post an.
-     * Wenn das Bild schon einmal von dieser URL importiert wurde, wird nur die ID zurückgegeben.
-     *
-     * @param string $thumbnail_url Externe Bild-URL
-     * @param int    $post_id       ID des Posts, an den das Bild gehängt werden soll
-     * @return int|WP_Error         Attachment-ID oder WP_Error
-     */
+    /** Einzelnes Bild sideloaden oder vorhandenes Attachment wiederverwenden. */
     private function import_image_from_url($thumbnail_urls, $post_id) {
         $thumbnail_url = $thumbnail_urls['url'] ?? '';
 
@@ -147,12 +139,7 @@ class ffami_image_import {
     }
 
 
-    /**
-     * Callback für upload_dir, um Jahr/Monat anhand $this->current_upload_time zu erzwingen.
-     *
-     * @param array $dirs Standard-Pfade/URLs für Uploads
-     * @return array Modifizierte Pfade/URLs
-     */
+    /** upload_dir Filter zur Erzwingung des Zeitstempel-Unterordners. */
     public function filter_upload_dir_by_date($dirs) {
         $t = $this->current_upload_time;
         $sub  = '/' . date('Y/m', $t);
