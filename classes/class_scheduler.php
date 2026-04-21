@@ -25,6 +25,7 @@ class ffami_scheduler {
     private const OPTION_ROOT_MD5       = 'ffami_root_md5';
 
     private const OPTION_PENDING = 'ffami_pending_missions'; // array of mission_ids currently geplant aber noch nicht abgeschlossen
+    private const OPTION_FAILED  = 'ffami_failed_missions'; // mission_ids mit letztem Importfehler
 
     public function __construct() {
         add_action(self::RECURRING_HOOK, [$this, 'check_years']); // stündlich aktuelles Jahr
@@ -94,6 +95,24 @@ class ffami_scheduler {
 
     public function check_years(): void { // Quick Scan: nur höchstes Jahr aus cache
         $this->run_scan('current_cached');
+    }
+
+    private function log_event(string $message, array $context = []) : void {
+        if (class_exists('ffami_debug_logger')) {
+            ffami_debug_logger::log($message, $context);
+        }
+    }
+
+    private function log_error(string $message, array $context = []) : void {
+        $line = 'FFAMI Scheduler: ' . $message;
+        if (!empty($context)) {
+            $json = wp_json_encode($context, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+            if (is_string($json) && $json !== '') {
+                $line .= ' | ' . $json;
+            }
+        }
+        error_log($line);
+        $this->log_event('Scheduler error: ' . $message, $context);
     }
 
     /**
@@ -188,23 +207,22 @@ class ffami_scheduler {
             if ($storedYearMd5 === $yearMd5) {
                 // MD5 unverändert -> prüfen ob Jahr bereits vollständig importiert ist
                 $completeFlagKey = 'ffami_year_completed_' . sanitize_key((string)$year);
-                if ($mode === 'current_cached' && get_option($completeFlagKey)) { // bereits als vollständig markiert
+                $allMissions = $this->collect_missions_generic($yearData);
+                $retryable = $this->find_retryable_missions($allMissions);
+                if ($mode === 'current_cached' && get_option($completeFlagKey) && empty($retryable)) { // bereits als vollständig markiert
                     continue;
                 }
-                // Missionsliste extrahieren und fehlende planen
-                $allMissions = $this->collect_missions_generic($yearData);
                 $missionCount = count($allMissions);
                 if ($missionCount === 0) { // nichts gefunden
                     continue;
                 }
-                $missing = $this->find_missing_missions($allMissions);
-        if (!empty($missing)) {
-                    foreach ($missing as $mission) {
+                if (!empty($retryable)) {
+                    foreach ($retryable as $mission) {
                         $missionUrl = $mission['detailUrl'] ?? ($mission['url'] ?? null);
                         if (!$missionUrl) { continue; }
                         $missionId = $this->derive_mission_id($mission);
                         // Wenn bereits pending -> nicht erneut planen
-            if ($this->is_pending($missionId)) { continue; }
+                        if ($this->is_pending($missionId)) { continue; }
                         $args = ['mission_id'=>$missionId,'mission_url'=>$missionUrl];
                         if (function_exists('as_has_scheduled_action') && as_has_scheduled_action(self::IMPORT_HOOK, $args, self::GROUP)) { continue; }
                         if (function_exists('as_enqueue_async_action')) {
@@ -213,8 +231,8 @@ class ffami_scheduler {
                         }
                     }
                 }
-        // Wenn keine fehlenden, Jahr als vollständig markieren
-        if ($mode === 'current_cached' && empty($missing)) { update_option($completeFlagKey, 1, false); }
+                // Wenn keine fehlenden/fehlgeschlagenen, Jahr als vollständig markieren
+                if ($mode === 'current_cached' && empty($retryable)) { update_option($completeFlagKey, 1, false); }
                 continue;
             }
 
@@ -315,12 +333,38 @@ class ffami_scheduler {
     }
 
     public function import_single_mission($mission_id, $mission_url): void {
+        $startedAt = microtime(true);
+        $success = false;
+        $this->log_event('Import gestartet', [
+            'mission_id' => (string) $mission_id,
+            'mission_url' => (string) $mission_url,
+        ]);
         try {
             new ffami_single_mission_import($mission_id, $mission_url);
-            // nach erfolgreichem Import pending entfernen
-            $this->remove_pending($mission_id);
+            $success = true;
         } catch (\Throwable $e) {
-            error_log('FFAMI Scheduler: Fehler beim Einzelimport: ' . $e->getMessage());
+            $this->add_failed($mission_id);
+            $this->log_error('Fehler beim Einzelimport', [
+                'mission_id' => (string) $mission_id,
+                'mission_url' => (string) $mission_url,
+                'exception' => get_class($e),
+                'message' => $e->getMessage(),
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'duration_ms' => (int) round((microtime(true) - $startedAt) * 1000),
+            ]);
+        } finally {
+            // Pending immer freigeben, damit fehlgeschlagene Imports erneut eingeplant werden koennen.
+            $this->remove_pending($mission_id);
+            if ($success) {
+                $this->remove_failed($mission_id);
+            }
+            $this->log_event('Import beendet', [
+                'mission_id' => (string) $mission_id,
+                'mission_url' => (string) $mission_url,
+                'success' => $success,
+                'duration_ms' => (int) round((microtime(true) - $startedAt) * 1000),
+            ]);
         }
     }
 
@@ -344,18 +388,33 @@ class ffami_scheduler {
     private function fetch_json(string $url): ?array {
         $response = wp_remote_get($url, ['timeout' => 10, 'headers' => ['Accept' => 'application/json']]);
         if (is_wp_error($response)) {
+            $this->log_error('Fetch WP error', [
+                'url' => $url,
+                'wp_error' => $response->get_error_message(),
+            ]);
             return null;
         }
         $code = wp_remote_retrieve_response_code($response);
         if ($code !== 200) {
+            $this->log_error('Fetch HTTP error', [
+                'url' => $url,
+                'http_code' => $code,
+            ]);
             return null;
         }
         $body = wp_remote_retrieve_body($response);
         if ($body === '') {
+            $this->log_error('Fetch empty body', [
+                'url' => $url,
+            ]);
             return null;
         }
         $data = json_decode($body, true);
         if (json_last_error() !== JSON_ERROR_NONE) {
+            $this->log_error('Fetch JSON decode error', [
+                'url' => $url,
+                'json_error' => json_last_error_msg(),
+            ]);
             return null;
         }
         return [$data, $body];
@@ -506,6 +565,28 @@ class ffami_scheduler {
         return $missing;
     }
 
+    private function find_retryable_missions(array $missions) : array {
+        if (empty($missions)) { return []; }
+        $missing = $this->find_missing_missions($missions);
+        $retryable = [];
+        $seen = [];
+        foreach ($missing as $mission) {
+            $missionId = !empty($mission['id']) ? (string) $mission['id'] : $this->derive_mission_id($mission);
+            $retryable[] = $mission;
+            $seen[$missionId] = true;
+        }
+        $failed = array_flip($this->get_failed());
+        foreach ($missions as $mission) {
+            $missionId = !empty($mission['id']) ? (string) $mission['id'] : $this->derive_mission_id($mission);
+            if (!isset($failed[$missionId]) || isset($seen[$missionId])) {
+                continue;
+            }
+            $retryable[] = $mission;
+            $seen[$missionId] = true;
+        }
+        return $retryable;
+    }
+
     private function get_pending() : array {
         $p = get_option(self::OPTION_PENDING, []);
         return is_array($p) ? $p : [];
@@ -526,5 +607,29 @@ class ffami_scheduler {
         $new = [];
         foreach ($p as $x) { if ($x !== $id) { $new[] = $x; } }
         $this->save_pending($new);
+    }
+
+    private function get_failed() : array {
+        $failed = get_option(self::OPTION_FAILED, []);
+        return is_array($failed) ? $failed : [];
+    }
+
+    private function save_failed(array $failed) : void {
+        update_option(self::OPTION_FAILED, array_values(array_unique($failed)), false);
+    }
+
+    private function add_failed(string $id) : void {
+        $failed = $this->get_failed();
+        if (!in_array($id, $failed, true)) {
+            $failed[] = $id;
+            $this->save_failed($failed);
+        }
+    }
+
+    private function remove_failed(string $id) : void {
+        $failed = $this->get_failed();
+        $new = [];
+        foreach ($failed as $x) { if ($x !== $id) { $new[] = $x; } }
+        $this->save_failed($new);
     }
 }

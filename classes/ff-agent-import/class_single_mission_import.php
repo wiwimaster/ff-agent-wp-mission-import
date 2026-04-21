@@ -21,6 +21,8 @@ class ffami_single_mission_import {
 
     private int $existing_post_id = 0;
 
+    private float $started_at = 0.0;
+
 
 
     /**
@@ -28,13 +30,18 @@ class ffami_single_mission_import {
      * @param string $mission_url Relativer API-Pfad (beginnend mit /hpWidget/...)
      */
     public function __construct($mission_id, $mission_url) {
+        $this->started_at = microtime(true);
 
         $this->mission = new ffami_mission();
         $this->mission->id = $mission_id;
         $this->mission->url = $mission_url;
 
+        $this->register_shutdown_logger();
+
         // 1. Daten abrufen
-        $this->fetch_mission_data();
+        if (!$this->fetch_mission_data()) {
+            throw new RuntimeException('Mission detail fetch failed for ' . $mission_id);
+        }
 
         // 2. Neu oder geändert?
         $isNew = $this->is_new_mission();
@@ -48,6 +55,53 @@ class ffami_single_mission_import {
                 new ffami_image_import($this->mission);
             }
         } 
+    }
+
+    private function log_event(string $message, array $context = []) : void {
+        if (class_exists('ffami_debug_logger')) {
+            ffami_debug_logger::log($message, $context);
+        }
+    }
+
+    private function log_error(string $message, array $context = []) : void {
+        $line = 'FFAMI Import: ' . $message;
+        if (!empty($context)) {
+            $json = wp_json_encode($context, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+            if (is_string($json) && $json !== '') {
+                $line .= ' | ' . $json;
+            }
+        }
+        error_log($line);
+        $this->log_event('Import error: ' . $message, $context);
+    }
+
+    private function register_shutdown_logger() : void {
+        $missionId = (string) $this->mission->id;
+        $missionUrl = (string) $this->mission->url;
+        $startedAt = $this->started_at;
+        register_shutdown_function(function () use ($missionId, $missionUrl, $startedAt) {
+            $error = error_get_last();
+            if (!$error) {
+                return;
+            }
+            $fatalTypes = [E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR, E_USER_ERROR];
+            if (!in_array($error['type'] ?? null, $fatalTypes, true)) {
+                return;
+            }
+            $context = [
+                'mission_id' => $missionId,
+                'mission_url' => $missionUrl,
+                'error_type' => $error['type'] ?? null,
+                'message' => $error['message'] ?? '',
+                'file' => $error['file'] ?? '',
+                'line' => $error['line'] ?? 0,
+                'duration_ms' => (int) round((microtime(true) - $startedAt) * 1000),
+            ];
+            error_log('FFAMI Import fatal shutdown: ' . wp_json_encode($context, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE));
+            if (class_exists('ffami_debug_logger')) {
+                ffami_debug_logger::log('Import fatal shutdown', $context);
+            }
+        });
     }
 
 
@@ -96,7 +150,11 @@ class ffami_single_mission_import {
         ]);
 
         if (is_wp_error($response)) {
-            error_log('FFAMI mission fetch error: ' . $response->get_error_message());
+            $this->log_error('Mission fetch WP error', [
+                'mission_id' => $this->mission->id,
+                'url' => $url,
+                'wp_error' => $response->get_error_message(),
+            ]);
             if (is_admin()) {
                 echo '<div class="notice notice-error"><p>Fehler beim Abrufen der Einsatzdaten: ' . esc_html($response->get_error_message()) . '</p></div>';
             }
@@ -105,7 +163,11 @@ class ffami_single_mission_import {
 
         $code = wp_remote_retrieve_response_code($response);
         if ($code !== 200) {
-            error_log('FFAMI mission fetch HTTP ' . $code . ' for ' . $url);
+            $this->log_error('Mission fetch HTTP error', [
+                'mission_id' => $this->mission->id,
+                'url' => $url,
+                'http_code' => $code,
+            ]);
             if (is_admin()) {
                 echo '<div class="notice notice-error"><p>Fehler: Server antwortete mit HTTP ' . esc_html((string)$code) . '</p></div>';
             }
@@ -114,13 +176,20 @@ class ffami_single_mission_import {
 
         $body = wp_remote_retrieve_body($response);
         if ($body === '') {
-            error_log('FFAMI mission fetch empty body for ' . $url);
+            $this->log_error('Mission fetch empty body', [
+                'mission_id' => $this->mission->id,
+                'url' => $url,
+            ]);
             return false;
         }
 
         $rawMissionData = json_decode($body, true);
         if (json_last_error() !== JSON_ERROR_NONE) {
-            error_log('FFAMI mission JSON decode error: ' . json_last_error_msg());
+            $this->log_error('Mission JSON decode error', [
+                'mission_id' => $this->mission->id,
+                'url' => $url,
+                'json_error' => json_last_error_msg(),
+            ]);
             if (is_admin()) {
                 echo '<div class="notice notice-error"><p>Fehler beim Parsen der Einsatzdaten: ' . esc_html(json_last_error_msg()) . '</p></div>';
             }
@@ -164,7 +233,10 @@ class ffami_single_mission_import {
         $post_id = wp_insert_post($post_arr);
 
     if (is_wp_error($post_id)) {
-            error_log('Error creating mission post: ' . $post_id->get_error_message());
+            $this->log_error('Error creating mission post', [
+                'mission_id' => $this->mission->id,
+                'message' => $post_id->get_error_message(),
+            ]);
             return 0;
         } else {
             //store the post ID in the mission object
@@ -175,7 +247,12 @@ class ffami_single_mission_import {
 
             //return the post ID
             if (class_exists('ffami_debug_logger')) {
-                ffami_debug_logger::log('Mission gespeichert', ['id'=>$this->mission->id,'post_id'=>$post_id,'hash'=>$this->mission->md5_hash]);
+                ffami_debug_logger::log('Mission gespeichert', [
+                    'id'=>$this->mission->id,
+                    'post_id'=>$post_id,
+                    'hash'=>$this->mission->md5_hash,
+                    'duration_ms' => (int) round((microtime(true) - $this->started_at) * 1000),
+                ]);
             }
             return $post_id;
         }

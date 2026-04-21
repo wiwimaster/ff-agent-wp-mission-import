@@ -49,12 +49,12 @@ class ffami_mission {
         $this->set_content($mission_data['detail']);
         $this->set_datetime($mission_data['alarmDate']);
         $this->set_image_urls($mission_data['images']);
-        $this->set_duration($mission_data['duration']);
+        $this->set_duration($mission_data['duration'] ?? null);
         $this->set_location($mission_data['location']);
         $this->set_person_count($mission_data['personCount']);
         $this->set_mission_type($mission_data['type']);
         $this->set_vehicles($mission_data['vehicles']);
-        $this->set_title($mission_data['title']);
+        $this->set_title($mission_data['title'], $mission_data['type'] ?? '');
         $this->set_raw_title($mission_data['title']);
 
         $this->set_md5_hash($mission_data);
@@ -83,8 +83,11 @@ class ffami_mission {
     /**
      * Titel setzen (kombiniert Typ, Roh-Titel und Ort, sofern vorhanden).
      */
-    public function set_title($title): void {
-        $base = $title ?? '';
+    public function set_title($title, $mission_type = ''): void {
+        $base = is_string($title) ? trim($title) : '';
+        if ($base === '') {
+            $base = $this->resolve_title_from_type($mission_type);
+        }
         $this->title = $this->expand_title_abbreviations($base);
     }
 
@@ -120,9 +123,25 @@ class ffami_mission {
      * Zeitstempel übernehmen (ms seit Epoch) -> MySQL Format.
      */
     public function set_datetime($datetime): void {
-        $this->datetime = isset($datetime)
-            ? date('Y-m-d H:i:s', $datetime / 1000)
-            : current_time('mysql');
+        if (isset($datetime)) {
+            // API liefert ms seit Unix-Epoch (angenommen UTC) -> in Site-TZ (z.B. Europe/Berlin mit DST) umrechnen
+            $ts = (int) ($datetime / 1000);
+            try {
+                $dt = new DateTime('@' . $ts); // Basis UTC
+                // WordPress-Site-Zeitzone (Einstellungen) verwenden, fällt zurück auf blog GMT offset
+                if (function_exists('wp_timezone')) {
+                    $dt->setTimezone(wp_timezone());
+                } else {
+                    $offset = (float) get_option('gmt_offset', 0);
+                    $dt->modify(($offset >= 0 ? '+' : '-') . abs($offset) . ' hours');
+                }
+                $this->datetime = $dt->format('Y-m-d H:i:s');
+            } catch (Exception $e) {
+                $this->datetime = current_time('mysql');
+            }
+        } else {
+            $this->datetime = current_time('mysql');
+        }
     }
 
 
@@ -142,7 +161,7 @@ class ffami_mission {
     /**
      * Dauer parsen; unterstützt mehrere Formate und speichert Minuten + DateInterval.
      */
-    public function set_duration(string $duration): void {
+    public function set_duration($duration): void {
         $orig = $duration;
         $duration = trim((string)$duration);
         $totalMinutes = null;
@@ -215,6 +234,28 @@ class ffami_mission {
         $this->raw_title = $this->expand_title_abbreviations($base);
     }
 
+    private function resolve_title_from_type($mission_type): string {
+        $raw_type = is_string($mission_type) ? trim($mission_type) : '';
+        $upper = strtoupper($raw_type);
+        $default_map = [
+            'FIRST_RESPONDER' => 'First Responder Einsatz',
+            'THL' => 'THL Einsatz',
+            'FIRE' => 'Brandeinsatz',
+            'OTHER' => 'Einsatz',
+            'TECHNISCHE HILFELEISTUNG' => 'THL Einsatz',
+            'BRAND' => 'Brandeinsatz',
+            'SONSTIGES' => 'Einsatz',
+        ];
+        $map = apply_filters('ffami_type_title_map', $default_map, $this);
+        if (is_array($map) && isset($map[$upper]) && is_string($map[$upper])) {
+            return trim($map[$upper]);
+        }
+        if ($raw_type !== '') {
+            return preg_replace('/\s+/', ' ', str_replace('_', ' ', $raw_type)) ?: 'Einsatz';
+        }
+        return 'Einsatz';
+    }
+
 
     /**
      * Fahrzeugliste extrahieren (Titel sortiert, case-insensitiv).
@@ -282,7 +323,7 @@ class ffami_mission {
         if ($title === '') {
             return $title;
         }
-        $abbrMap = apply_filters('ffami_title_abbreviation_map', ['VU' => 'Verkehrsunfall']);
+        $abbrMap = apply_filters('ffami_title_abbreviation_map', ['VU' => 'Verkehrsunfall', 'RD', 'Rettungsdienst', 'BMA', 'Brandmeldeanlage']);
         if (!is_array($abbrMap)) {
             return $title;
         }
@@ -338,7 +379,7 @@ class ffami_mission {
             }
         }
         // Abgeleitete Felder
-        $m->set_title($m->raw_title);
+        $m->set_title($m->raw_title, $m->mission_type);
         $m->has_images = has_post_thumbnail($post_id);
         $m->image_urls = []; // nicht rekonstruierbar aus WP direkt
         return $m;
