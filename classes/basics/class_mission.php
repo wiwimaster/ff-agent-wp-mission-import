@@ -26,6 +26,8 @@ class ffami_mission {
 
     public string $datetime;
 
+    public int $alarm_ts = 0; // Alarmzeit als Unix-Timestamp (UTC), Schlüssel für die MP-Feuer-Zuordnung
+
     public DateInterval $duration;
     public int $duration_minutes = 0; // Normalisierter Minutenwert für Queries
 
@@ -38,6 +40,23 @@ class ffami_mission {
     public array $vehicles = [];
 
     public string $md5_hash;
+
+    // Ergänzungen aus dem MP-Feuer-Export (leer, wenn nicht zugeordnet)
+    public string $mpfeuer_id = '';
+
+    public ?int $start_ts = null;
+
+    public ?int $end_ts = null;
+
+    public string $stichwort = '';
+
+    public string $einsatzart = '';
+
+    public string $kategorie = '';
+
+    public array $units = [];
+
+    public string $ortsteil = '';
 
 
 
@@ -77,6 +96,9 @@ class ffami_mission {
         update_post_meta($this->post_id, 'ffami_mission_vehicles', $this->vehicles);
         update_post_meta($this->post_id, 'ffami_mission_hash', $this->md5_hash); // legacy key actually used elsewhere
         update_post_meta($this->post_id, 'ffami_mission_md5_hash', $this->md5_hash); // key referenced by import logic
+        if ($this->alarm_ts > 0) {
+            update_post_meta($this->post_id, 'ffami_alarm_ts', $this->alarm_ts);
+        }
     }
 
 
@@ -126,6 +148,7 @@ class ffami_mission {
         if (isset($datetime)) {
             // API liefert ms seit Unix-Epoch (angenommen UTC) -> in Site-TZ (z.B. Europe/Berlin mit DST) umrechnen
             $ts = (int) ($datetime / 1000);
+            $this->alarm_ts = $ts;
             try {
                 $dt = new DateTime('@' . $ts); // Basis UTC
                 // WordPress-Site-Zeitzone (Einstellungen) verwenden, fällt zurück auf blog GMT offset
@@ -323,7 +346,7 @@ class ffami_mission {
         if ($title === '') {
             return $title;
         }
-        $abbrMap = apply_filters('ffami_title_abbreviation_map', ['VU' => 'Verkehrsunfall', 'RD', 'Rettungsdienst', 'BMA', 'Brandmeldeanlage']);
+        $abbrMap = apply_filters('ffami_title_abbreviation_map', ['VU' => 'Verkehrsunfall', 'RD' => 'Rettungsdienst', 'BMA' => 'Brandmeldeanlage']);
         if (!is_array($abbrMap)) {
             return $title;
         }
@@ -378,10 +401,54 @@ class ffami_mission {
                 $m->duration = new DateInterval('PT0H0M');
             }
         }
+        $m->alarm_ts = (int) get_post_meta($post_id, 'ffami_alarm_ts', true);
+        $m->apply_mpfeuer_meta();
         // Abgeleitete Felder
         $m->set_title($m->raw_title, $m->mission_type);
         $m->has_images = has_post_thumbnail($post_id);
         $m->image_urls = []; // nicht rekonstruierbar aus WP direkt
         return $m;
+    }
+
+    /**
+     * Legt zugeordnete MP-Feuer-Werte (Meta ffami_mpf_*) über die Widget-Felder,
+     * wo sie präziser oder umfangreicher sind. Adresse und Besatzungsstärke
+     * werden bewusst nicht geladen (nur intern gespeichert).
+     */
+    private function apply_mpfeuer_meta(): void {
+        $this->mpfeuer_id = (string) get_post_meta($this->post_id, 'ffami_mpf_id', true);
+        if ($this->mpfeuer_id === '') {
+            return;
+        }
+        $this->stichwort = (string) get_post_meta($this->post_id, 'ffami_mpf_stichwort', true);
+        $this->einsatzart = ffami_mpfeuer_record::clean_einsatzart((string) get_post_meta($this->post_id, 'ffami_mpf_einsatzart', true));
+        $this->kategorie = (string) get_post_meta($this->post_id, 'ffami_mpf_kategorie', true);
+        $this->units = array_values(array_filter((array) get_post_meta($this->post_id, 'ffami_mpf_units', true), 'is_string'));
+        $this->ortsteil = (string) get_post_meta($this->post_id, 'ffami_mpf_ortsteil', true);
+
+        // Beginn/Ende auf die Sekunde ersetzen Alarmzeit und Dauer-Text des Widgets
+        $start = (int) get_post_meta($this->post_id, 'ffami_mpf_start_ts', true);
+        $end = (int) get_post_meta($this->post_id, 'ffami_mpf_end_ts', true);
+        if ($start > 0) {
+            $this->start_ts = $start;
+            $this->datetime = wp_date('Y-m-d H:i:s', $start);
+        }
+        if ($start > 0 && $end > $start) {
+            $this->end_ts = $end;
+            $this->duration_minutes = (int) round(($end - $start) / 60);
+            $this->duration = new DateInterval(sprintf('PT%dH%dM', intdiv($this->duration_minutes, 60), $this->duration_minutes % 60));
+        }
+
+        // Fahrzeuge (eigene Namen): längere Liste gewinnt, bei Gleichstand MP-Feuer
+        $vehicles = array_values(array_filter((array) get_post_meta($this->post_id, 'ffami_mpf_vehicles', true), 'is_string'));
+        if ($vehicles && count($vehicles) >= count($this->vehicles)) {
+            $this->vehicles = $vehicles;
+        }
+
+        // Personal: nur Anzahl, größere Zahl gewinnt
+        $persons = (int) get_post_meta($this->post_id, 'ffami_mpf_person_count', true);
+        if ($persons > $this->person_count) {
+            $this->person_count = $persons;
+        }
     }
 }

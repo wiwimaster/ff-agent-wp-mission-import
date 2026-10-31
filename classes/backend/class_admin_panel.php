@@ -253,6 +253,9 @@ class ffami_admin_panel {
             }
         }
 
+        // MP-Feuer-Export
+        (new ffami_mpfeuer_admin())->render();
+
         // Debug Log Steuerung
         echo '<hr><h2>Debug Log</h2>';
         if (isset($_POST['ffami_debug_clear']) && check_admin_referer('ffami_debug_actions')) {

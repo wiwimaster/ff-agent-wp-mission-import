@@ -45,3 +45,6 @@ wp-config.php
 #
 
 .vscode/
+# Composer
+/vendor/
+.phpunit.cache/
