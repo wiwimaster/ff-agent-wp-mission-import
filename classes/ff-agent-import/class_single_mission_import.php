@@ -47,14 +47,23 @@ class ffami_single_mission_import {
         $isNew = $this->is_new_mission();
         $isUpdated = !$isNew && $this->is_updated_mission();
         if ($isNew || $isUpdated) {
-            // 3. Speichern
+            // 3. Speichern (wirft bei Fehler, dann kein Bildimport)
             $this->import_mission_data();
 
             // 4. Bilder
             if ($this->mission->has_images) {
                 new ffami_image_import($this->mission);
             }
-        } 
+        } else {
+            // Unverändert: Alarmzeit nachziehen, falls sie noch fehlt
+            $this->mission->post_id = $this->existing_post_id;
+            if ($this->mission->alarm_ts > 0 && !get_post_meta($this->existing_post_id, 'ffami_alarm_ts', true)) {
+                update_post_meta($this->existing_post_id, 'ffami_alarm_ts', $this->mission->alarm_ts);
+            }
+        }
+
+        // 5. Nachgelagerte Module (z.B. MP-Feuer-Zuordnung) – auch im Zweig "unverändert"
+        do_action('ffami_mission_saved', $this->mission->post_id, $this->mission, $isNew || $isUpdated);
     }
 
     private function log_event(string $message, array $context = []) : void {
@@ -206,9 +215,6 @@ class ffami_single_mission_import {
     /** CPT (neu oder Update) speichern + Metadaten schreiben. */
     private function save_mission_data(): int {
 
-        // Generate permalink in the format "YYYY-MM-DD_" + post_title
-    $permalink = date('Y-m-d-h-i', strtotime($this->mission->datetime)) . '_' . sanitize_title($this->mission->title);
-
         // Create a new custom post (type "mission")
         $post_arr = [
             'post_type'    => 'mission',
@@ -216,28 +222,34 @@ class ffami_single_mission_import {
             'post_content' => $this->mission->content,
             'post_date'    => $this->mission->datetime,
             'post_status'  => 'publish',
-            'post_name'    => $permalink,
         ];
 
         // If the mission was already imported, update the existing post
     if ($this->existing_post_id) { // is_new_mission() bereits gesetzt earlier
             // If it's an update scenario and hashes differ, update existing post
             if ($this->is_updated_mission()) {
+                // Slug bestehender Einsätze bleibt unverändert (keine toten Links)
                 $post_arr['ID'] = $this->existing_post_id;
+                $post_arr['post_name'] = (string) get_post_field('post_name', $this->existing_post_id);
             } else {
                 // No changes -> skip persistence of duplicate content
                 return $this->existing_post_id;
             }
+        } else {
+            // Permalink "YYYY-MM-DD-HH-MM_<Titel>" in Ortszeit, 24-Stunden-Format
+            $alarm = $this->mission->alarm_ts > 0 ? $this->mission->alarm_ts : strtotime(get_gmt_from_date($this->mission->datetime) . ' UTC');
+            $post_arr['post_name'] = wp_date('Y-m-d-H-i', $alarm) . '_' . sanitize_title($this->mission->title);
         }
 
-        $post_id = wp_insert_post($post_arr);
+        $post_id = wp_insert_post($post_arr, true);
 
-    if (is_wp_error($post_id)) {
+        if (is_wp_error($post_id) || !$post_id) {
+            $message = is_wp_error($post_id) ? $post_id->get_error_message() : 'wp_insert_post lieferte 0';
             $this->log_error('Error creating mission post', [
                 'mission_id' => $this->mission->id,
-                'message' => $post_id->get_error_message(),
+                'message' => $message,
             ]);
-            return 0;
+            throw new RuntimeException('Mission post could not be saved for ' . $this->mission->id . ': ' . $message);
         } else {
             //store the post ID in the mission object
             $this->mission->post_id = $post_id;

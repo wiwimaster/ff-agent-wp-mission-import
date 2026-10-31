@@ -130,10 +130,6 @@ class ffami_admin_panel {
 
         // Statusboard
     echo '<hr><h2>' . esc_html__('Status', 'ffami') . '</h2>';
-        $last_run = get_option('ffami_last_run', '–');
-        $last_count = (int)get_option('ffami_last_run_imported', 0);
-        $queue_size = (int)get_option('ffami_queue_size', 0);
-    echo '<p>' . sprintf(esc_html__('Letzter Cron-Lauf: %1$s (importiert: %2$d, Queue: %3$d)', 'ffami'), esc_html($last_run), esc_html($last_count), esc_html($queue_size)) . '</p>';
         $last_check = get_option('ffami_last_check', '–');
         $last_scheduled = (int)get_option('ffami_last_scheduled', 0);
     echo '<p>' . sprintf(esc_html__('Letzte Diff-Prüfung: %1$s; neu geplante Missionen: %2$d', 'ffami'), esc_html($last_check), esc_html($last_scheduled)) . '</p>';
@@ -256,6 +252,9 @@ class ffami_admin_panel {
                 }
             }
         }
+
+        // MP-Feuer-Export
+        (new ffami_mpfeuer_admin())->render();
 
         // Debug Log Steuerung
         echo '<hr><h2>Debug Log</h2>';

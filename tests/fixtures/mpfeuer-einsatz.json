@@ -1,0 +1,384 @@
+{
+  "_version": "2016.4",
+  "Einsatz": {
+    "_id": "00000000-0000-4000-8000-000000000001",
+    "Allgemein": {
+      "Kategorie": "Sonstiges",
+      "Zeit_Von": "2026-09-26T01:21:14",
+      "Zeit_Bis": "2026-09-26T03:53:51",
+      "Notruf_Eing": null,
+      "Leitstellen_Nr": "A 9.9 999999 99999",
+      "Einsatzleiter": null,
+      "Alarmgeber": "Leitstelle",
+      "Alarmstichwort": "INF SONSTIGES",
+      "Einsatz_Art": "#INF#Anforderung Rettungshunde",
+      "Erlaeuterung": "Freitext gekürzt..",
+      "Einsatz_Lage": null,
+      "Einsatz_Verlauf": "Freitext Verlauf",
+      "Ursache": null,
+      "Brandausbreitung": null,
+      "Loeschwasser_Menge": null,
+      "Brand_Unter_Kontrolle": null,
+      "Feuer_Aus": null,
+      "Brandwache": null,
+      "Personen_Gerettet": null,
+      "Verletzte_Zivil": null,
+      "Verletzte_FW": null,
+      "Verluste_Zivil": null,
+      "Verluste_FW": null,
+      "Einsatzort": {
+        "Strasse": "Musterweg 1",
+        "PLZ": "99999",
+        "Ort": "Musterort - Musterstadt",
+        "Ortsteil": null,
+        "Ort_Zusatz": null,
+        "Objekt_Name": null,
+        "Objekt_Ident_Nr": null,
+        "Objektlage": null,
+        "Objektnutzung": null
+      }
+    },
+    "Statistik": [],
+    "Tagebuch": [
+      {
+        "Kategorie": "Alarmierung",
+        "Kommunikationsweg": "Funk",
+        "Zeit": "2026-09-26T01:21:13",
+        "Empfaenger": "SCHLEIFE-1",
+        "Absender": null,
+        "Meldung": null
+      },
+      {
+        "Kategorie": "Alarmierung",
+        "Kommunikationsweg": "Sonstiges",
+        "Zeit": "2026-09-26T01:21:17",
+        "Empfaenger": "SCHLEIFE-2",
+        "Absender": null,
+        "Meldung": null
+      },
+      {
+        "Kategorie": "Alarmierung",
+        "Kommunikationsweg": "Sonstiges",
+        "Zeit": "2026-09-26T01:21:17",
+        "Empfaenger": "SCHLEIFE-3",
+        "Absender": null,
+        "Meldung": null
+      }
+    ],
+    "Fahrzeuge": [
+      {
+        "FMS_ID": "Drohne",
+        "Bezeichnung": "Drohne",
+        "Funkrufname": null,
+        "Kennzeichen": null,
+        "Besatzung": null,
+        "Zeit_AUS": "2026-09-26T01:29:28",
+        "Zeit_STOPP": null,
+        "Zeit_ADE": null,
+        "Zeit_VDE": null,
+        "Zeit_EIN": "2026-09-26T03:53:51"
+      },
+      {
+        "FMS_ID": "Steinebach 11/1",
+        "Bezeichnung": "MZF - Steinebach 11/1",
+        "Funkrufname": null,
+        "Kennzeichen": null,
+        "Besatzung": null,
+        "Zeit_AUS": "2026-09-26T01:29:00",
+        "Zeit_STOPP": null,
+        "Zeit_ADE": null,
+        "Zeit_VDE": null,
+        "Zeit_EIN": "2026-09-26T03:45:00"
+      }
+    ],
+    "Personal": [
+      {
+        "Vorname": "Vorname1",
+        "Nachname": "Nachname1",
+        "Nummer": null,
+        "Barcode": null,
+        "Aufgabe": null,
+        "Verg_Betrag": null,
+        "Fahrzeug_ID": null,
+        "Infotext": null,
+        "MML_BE": null,
+        "MML_AS": null,
+        "MML_LA": null,
+        "MML_VA": null,
+        "MML_VB": null,
+        "MML_VC": null,
+        "MML_VD": null,
+        "MML_VE": null,
+        "MML_SZ": null,
+        "MML_PK": null,
+        "Zeit_Von": "2026-09-26T01:21:14",
+        "Zeit_Bis": "2026-09-26T03:53:51"
+      },
+      {
+        "Vorname": "Vorname2",
+        "Nachname": "Nachname2",
+        "Nummer": null,
+        "Barcode": null,
+        "Aufgabe": null,
+        "Verg_Betrag": null,
+        "Fahrzeug_ID": null,
+        "Infotext": null,
+        "MML_BE": null,
+        "MML_AS": null,
+        "MML_LA": null,
+        "MML_VA": null,
+        "MML_VB": null,
+        "MML_VC": null,
+        "MML_VD": null,
+        "MML_VE": null,
+        "MML_SZ": null,
+        "MML_PK": null,
+        "Zeit_Von": "2026-09-26T01:21:14",
+        "Zeit_Bis": "2026-09-26T03:53:51"
+      },
+      {
+        "Vorname": "Vorname3",
+        "Nachname": "Nachname3",
+        "Nummer": null,
+        "Barcode": null,
+        "Aufgabe": null,
+        "Verg_Betrag": null,
+        "Fahrzeug_ID": null,
+        "Infotext": null,
+        "MML_BE": null,
+        "MML_AS": null,
+        "MML_LA": null,
+        "MML_VA": null,
+        "MML_VB": null,
+        "MML_VC": null,
+        "MML_VD": null,
+        "MML_VE": null,
+        "MML_SZ": null,
+        "MML_PK": null,
+        "Zeit_Von": "2026-09-26T01:21:14",
+        "Zeit_Bis": "2026-09-26T03:53:51"
+      },
+      {
+        "Vorname": "Vorname4",
+        "Nachname": "Nachname4",
+        "Nummer": null,
+        "Barcode": null,
+        "Aufgabe": null,
+        "Verg_Betrag": null,
+        "Fahrzeug_ID": null,
+        "Infotext": null,
+        "MML_BE": null,
+        "MML_AS": null,
+        "MML_LA": null,
+        "MML_VA": null,
+        "MML_VB": null,
+        "MML_VC": null,
+        "MML_VD": null,
+        "MML_VE": null,
+        "MML_SZ": null,
+        "MML_PK": null,
+        "Zeit_Von": "2026-09-26T01:21:14",
+        "Zeit_Bis": "2026-09-26T03:53:51"
+      }
+    ],
+    "Sonstige_EK": [
+      {
+        "Bezeichnung": "SEG Rettungshunde Fürstenfeldbruck MHD",
+        "Zeit_Von": "2026-09-26T01:21:14",
+        "Zeit_Bis": "2026-09-26T03:53:51",
+        "Fahrzeug": null,
+        "Besatzung": null
+      },
+      {
+        "Bezeichnung": "SEG Rettungshunde Dachau MHD",
+        "Zeit_Von": "2026-09-26T01:21:14",
+        "Zeit_Bis": "2026-09-26T03:53:51",
+        "Fahrzeug": null,
+        "Besatzung": null
+      },
+      {
+        "Bezeichnung": "SEG Rettungshunde Oberbayern JUH",
+        "Zeit_Von": "2026-09-26T01:21:14",
+        "Zeit_Bis": "2026-09-26T03:53:51",
+        "Fahrzeug": null,
+        "Besatzung": null
+      },
+      {
+        "Bezeichnung": "SEG Rettungshunde Starnberg DLRG",
+        "Zeit_Von": "2026-09-26T01:21:14",
+        "Zeit_Bis": "2026-09-26T03:53:51",
+        "Fahrzeug": null,
+        "Besatzung": null
+      },
+      {
+        "Bezeichnung": "Johannes Fürstenfeldbruck 11/10/1",
+        "Zeit_Von": "2026-09-26T01:21:14",
+        "Zeit_Bis": "2026-09-26T03:53:51",
+        "Fahrzeug": null,
+        "Besatzung": null
+      },
+      {
+        "Bezeichnung": "Johannes Fürstenfeldbruck 51/11/1",
+        "Zeit_Von": "2026-09-26T01:21:14",
+        "Zeit_Bis": "2026-09-26T03:53:51",
+        "Fahrzeug": null,
+        "Besatzung": null
+      },
+      {
+        "Bezeichnung": "Johannes Dachau 51/59/1",
+        "Zeit_Von": "2026-09-26T01:21:14",
+        "Zeit_Bis": "2026-09-26T03:53:51",
+        "Fahrzeug": null,
+        "Besatzung": null
+      },
+      {
+        "Bezeichnung": "Akkon Landsberg 41/59/1",
+        "Zeit_Von": "2026-09-26T01:21:14",
+        "Zeit_Bis": "2026-09-26T03:53:51",
+        "Fahrzeug": null,
+        "Besatzung": null
+      },
+      {
+        "Bezeichnung": "Akkon Oberbayern 3/7",
+        "Zeit_Von": "2026-09-26T01:21:14",
+        "Zeit_Bis": "2026-09-26T03:53:51",
+        "Fahrzeug": null,
+        "Besatzung": null
+      },
+      {
+        "Bezeichnung": "Akkon Landsberg 41/59/2",
+        "Zeit_Von": "2026-09-26T01:21:14",
+        "Zeit_Bis": "2026-09-26T03:53:51",
+        "Fahrzeug": null,
+        "Besatzung": null
+      },
+      {
+        "Bezeichnung": "Pelikan Starnberg Land 11/1",
+        "Zeit_Von": "2026-09-26T01:21:14",
+        "Zeit_Bis": "2026-09-26T03:53:51",
+        "Fahrzeug": null,
+        "Besatzung": null
+      },
+      {
+        "Bezeichnung": "Pelikan Starnberg Land 9/1",
+        "Zeit_Von": "2026-09-26T01:21:14",
+        "Zeit_Bis": "2026-09-26T03:53:51",
+        "Fahrzeug": null,
+        "Besatzung": null
+      },
+      {
+        "Bezeichnung": "Pelikan Starnberg Land 9/2",
+        "Zeit_Von": "2026-09-26T01:21:14",
+        "Zeit_Bis": "2026-09-26T03:53:51",
+        "Fahrzeug": null,
+        "Besatzung": null
+      },
+      {
+        "Bezeichnung": "Pelikan Starnberg Land 9/3",
+        "Zeit_Von": "2026-09-26T01:21:14",
+        "Zeit_Bis": "2026-09-26T03:53:51",
+        "Fahrzeug": null,
+        "Besatzung": null
+      },
+      {
+        "Bezeichnung": "Pelikan Starnberg Land 9/4",
+        "Zeit_Von": "2026-09-26T01:21:14",
+        "Zeit_Bis": "2026-09-26T03:53:51",
+        "Fahrzeug": null,
+        "Besatzung": null
+      },
+      {
+        "Bezeichnung": "Tetra RD_LL",
+        "Zeit_Von": "2026-09-26T01:21:14",
+        "Zeit_Bis": "2026-09-26T03:53:51",
+        "Fahrzeug": null,
+        "Besatzung": null
+      },
+      {
+        "Bezeichnung": "Florian Oberpfaffenhofen UAV+Wärmebildkamera",
+        "Zeit_Von": "2026-09-26T01:21:14",
+        "Zeit_Bis": "2026-09-26T03:53:51",
+        "Fahrzeug": null,
+        "Besatzung": null
+      },
+      {
+        "Bezeichnung": "Florian Oberpfaffenhofen 11/1",
+        "Zeit_Von": "2026-09-26T01:21:14",
+        "Zeit_Bis": "2026-09-26T03:53:51",
+        "Fahrzeug": null,
+        "Besatzung": null
+      },
+      {
+        "Bezeichnung": "Rettungshunde - München",
+        "Zeit_Von": "2026-09-26T01:21:14",
+        "Zeit_Bis": "2026-09-26T03:53:51",
+        "Fahrzeug": null,
+        "Besatzung": null
+      },
+      {
+        "Bezeichnung": "Florian Aschheim Rettungshunde Fläche &Trümmer",
+        "Zeit_Von": "2026-09-26T01:21:14",
+        "Zeit_Bis": "2026-09-26T03:53:51",
+        "Fahrzeug": null,
+        "Besatzung": null
+      },
+      {
+        "Bezeichnung": "Florian Aschheim Rettungshunde Mantrailer",
+        "Zeit_Von": "2026-09-26T01:21:14",
+        "Zeit_Bis": "2026-09-26T03:53:51",
+        "Fahrzeug": null,
+        "Besatzung": null
+      },
+      {
+        "Bezeichnung": "Florian Hochbrück Rettungshunde",
+        "Zeit_Von": "2026-09-26T01:21:14",
+        "Zeit_Bis": "2026-09-26T03:53:51",
+        "Fahrzeug": null,
+        "Besatzung": null
+      },
+      {
+        "Bezeichnung": "Akkon München 51/10/1",
+        "Zeit_Von": "2026-09-26T01:21:14",
+        "Zeit_Bis": "2026-09-26T03:53:51",
+        "Fahrzeug": null,
+        "Besatzung": null
+      },
+      {
+        "Bezeichnung": "Akkon München 51/59/1",
+        "Zeit_Von": "2026-09-26T01:21:14",
+        "Zeit_Bis": "2026-09-26T03:53:51",
+        "Fahrzeug": null,
+        "Besatzung": null
+      },
+      {
+        "Bezeichnung": "Rotkreuz München 51/59/1",
+        "Zeit_Von": "2026-09-26T01:21:14",
+        "Zeit_Bis": "2026-09-26T03:53:51",
+        "Fahrzeug": null,
+        "Besatzung": null
+      },
+      {
+        "Bezeichnung": "Sama München 51/59/1",
+        "Zeit_Von": "2026-09-26T01:21:14",
+        "Zeit_Bis": "2026-09-26T03:53:51",
+        "Fahrzeug": null,
+        "Besatzung": null
+      },
+      {
+        "Bezeichnung": "Sama München Rettungshunde Mantrailer",
+        "Zeit_Von": "2026-09-26T01:21:14",
+        "Zeit_Bis": "2026-09-26T03:53:51",
+        "Fahrzeug": null,
+        "Besatzung": null
+      },
+      {
+        "Bezeichnung": "Sama München Rettungshunde Fläche + Trümmer",
+        "Zeit_Von": "2026-09-26T01:21:14",
+        "Zeit_Bis": "2026-09-26T03:53:51",
+        "Fahrzeug": null,
+        "Besatzung": null
+      }
+    ],
+    "Abteilung_Nr": "001"
+  }
+}
