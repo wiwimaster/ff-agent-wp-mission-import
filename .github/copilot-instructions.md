@@ -34,6 +34,11 @@ Flow:
 - Avoids duplicate imports by checking attachment meta `_external_image_url`.
 - Potential bug: uses `$date` variable (undefined) when deciding dated upload paths and when updating attachment dates; should likely derive from `$this->mission->datetime`.
 
+## MP-Feuer-Modul (`classes/mpfeuer-import/`)
+- `ffami_mpfeuer_endpoint` (REST `ffami/v1/mpfeuer/rest/<Kennung>/Einsatz`, Basic Auth, Rewrite ohne `/wp-json/`), `ffami_mpfeuer_record` (Datenregeln/Whitelist), `ffami_mpfeuer_queue` (CPT `ffami_mpfeuer`), `ffami_mpfeuer_matcher` (Zuordnung über Meta `ffami_alarm_ts`, Action `ffami_mission_saved`), `ffami_mpfeuer_admin`, `ffami_mpfeuer_settings`.
+- Zugeordnete Felder liegen als `ffami_mpf_*` an der Mission; `from_post` gibt ihnen Vorrang. `ffami_mpf_address`/`ffami_mpf_crew` nie ausgeben.
+- Tests: `composer test` (PHPUnit mit WP-Stubs in `tests/bootstrap.php`).
+
 ## Custom Post Type
 Defined in `class_mission_post_type.php` with slug `mission`; supports `title`, `editor`, `thumbnail`, `has_archive` true, public.
 
