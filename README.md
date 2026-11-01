@@ -17,11 +17,12 @@ FF-Agent schickt einen Einsatz per Hand („Export an MP-Feuer“) als
 
 1. prüft Zugangsdaten und `Content-Type: application/json` und antwortet `200 {}`
    (`401` mit `WWW-Authenticate: Basic realm="mpfeuer"` ohne bzw. mit falschen Zugangsdaten, `400` bei ungültigem
-   JSON, `415` bei falschem Content-Type, `429` nach zehn Fehlversuchen in zehn Minuten),
+   JSON, `415` bei falschem Content-Type, `429` nach zehn Fehlversuchen je Absender-IP in zehn Minuten),
 2. wendet sofort die Datenregeln an und verwirft alles andere (siehe unten),
 3. legt den bereinigten Datensatz in einer internen Warteschlange ab (Post-Typ `ffami_mpfeuer`, nicht öffentlich,
    ohne REST, ohne Suche), dedupliziert über die Export-`_id`,
-4. ordnet ihn über die Alarmzeit dem Widget-Einsatz zu (Standard-Toleranz ±10 Minuten, einstellbar). Kommt der
+4. ordnet ihn über die Alarmzeit dem Widget-Einsatz zu (Meta `ffami_alarm_ts`, die der Widget-Import bei jedem Lauf
+   aus `alarmDate` setzt; Standard-Toleranz ±10 Minuten, einstellbar). Kommt der
    Export vor dem Widget-Einsatz an, bleibt er `offen` und wird nach dem nächsten Widget-Import zugeordnet
    (Action `ffami_mission_saved`). Mehrere Einsätze im Zeitfenster werden über die Fahrzeugnamen plausibilisiert;
    bleibt es mehrdeutig, entscheidest du im Backend.
@@ -57,8 +58,22 @@ Rewrite-Regel – direkt unter `/mpfeuer/rest/<Kennung>/Einsatz`. Die Subdomain 
 Proxy (Caddy) auf den Website-Container zeigen. Läuft PHP hinter einem Proxy oder FastCGI, muss der
 `Authorization`-Header durchgereicht werden.
 
+**Absender-IP hinter Proxies:** Sperre und Ereignis-Log zählen je Absender. Kommt die Anfrage von einem vertrauten
+Proxy, gilt der letzte nicht vertraute Eintrag in `X-Forwarded-For` (von rechts gelesen), sonst `REMOTE_ADDR`.
+`CF-Connecting-IP` zählt nur, wenn die ganze Kette vertraut ist. Vertraut sind standardmäßig private Bereiche und
+Docker-Netze (`127.0.0.0/8`, `10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`, `169.254.0.0/16`, `::1`, `fc00::/7`,
+`fe80::/10`); abweichend per Konstante, etwa mit den Cloudflare-Bereichen, wenn Cloudflare davorsitzt:
+
+```php
+define('FFAMI_TRUSTED_PROXIES', '172.18.0.0/16, 173.245.48.0/20, …'); // CIDR, Komma/Leerzeichen oder Array
+```
+
+Setzt `wp-config.php` oder Apache (`mod_remoteip`) `REMOTE_ADDR` schon vorher um, sieht das Plugin nur das Ergebnis.
+Ein ungeprüftes `REMOTE_ADDR = CF-Connecting-IP` auf einem Namen ohne Cloudflare lässt Absender ihre Adresse frei
+wählen. Den Header dann nur übernehmen, wenn die Anfrage aus einem Cloudflare-Bereich kommt.
+
 Im Backend gibt es außerdem die Übersicht der Warteschlange (offen/zugeordnet, manuell zuordnen, verwerfen,
-„Zuordnung nachholen“), die letzten Eingänge (nur Zeit, Export-ID, Ergebnis) und die Prüfliste.
+„Zuordnung nachholen“), die letzten Eingänge (nur Zeit, Absender-IP, Export-ID, Ergebnis) und die Prüfliste.
 
 ### Datenregeln
 
@@ -82,7 +97,7 @@ die mittlere Zahl). Beide Tabellen sind im Backend pflegbar. Was sich nicht eino
 ### Datenschutz
 
 - Was nicht gespeichert werden darf, wird **beim Empfang** verworfen, nicht erst bei der Anzeige. Der Rohexport wird
-  weder gespeichert noch geloggt; protokolliert werden nur Zeit, Export-`_id` und Ergebnis.
+  weder gespeichert noch geloggt; protokolliert werden nur Zeit, Absender-IP, Export-`_id` und Ergebnis.
 - Adresse und Besatzungsstärke liegen nur als interne Metas (`ffami_mpf_address`, `ffami_mpf_crew`, als geschützte
   Metas ausgeblendet) am Beitrag und werden von keiner öffentlichen Ausgabe geliefert. Der Post-Typ `mission` hat
   keine REST-Ausgabe.

@@ -136,6 +136,14 @@ class MissionTest extends MpfeuerTestCase {
         $this->assertSame(ffami_mpfeuer_queue::STATUS_MATCHED, ffami_mpfeuer_queue::get_status($queue_id));
     }
 
+    public function test_widget_ohne_fahrzeuge(): void {
+        $data = $this->widget();
+        unset($data['vehicles']);
+        $m = new ffami_mission();
+        $m->import_mission_data($data);
+        $this->assertSame([], $m->vehicles);
+    }
+
     public function test_update_behaelt_slug(): void {
         $this->stub_widget();
         $this->import();

@@ -72,7 +72,7 @@ class ffami_mission {
         $this->set_location($mission_data['location']);
         $this->set_person_count($mission_data['personCount']);
         $this->set_mission_type($mission_data['type']);
-        $this->set_vehicles($mission_data['vehicles']);
+        $this->set_vehicles($mission_data['vehicles'] ?? []); // fehlt im Widget bei Einsätzen ohne Fahrzeug
         $this->set_title($mission_data['title'], $mission_data['type'] ?? '');
         $this->set_raw_title($mission_data['title']);
 
@@ -293,7 +293,7 @@ class ffami_mission {
      */
     public function set_vehicles($vehicles): void {
         $titles = [];
-        foreach ($vehicles as $vehicle) {
+        foreach ((array) $vehicles as $vehicle) {
             if (isset($vehicle['title'])) {
                 $titles[] = (string)$vehicle['title'];
             }
