@@ -51,7 +51,7 @@ class ffami_mpfeuer_settings {
         self::update(['pass_hash' => wp_hash_password($pass)]);
     }
 
-    /** Erwartete sechsstellige Kennung im Pfad; leer = jede Kennung annehmen. */
+    /** Erwartete sechsstellige Kennung im Pfad (Buchstaben und Ziffern); leer = jede Kennung annehmen. */
     public static function kennung(): string {
         return (string) (self::all()['kennung'] ?? '');
     }

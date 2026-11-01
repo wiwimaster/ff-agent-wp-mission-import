@@ -20,10 +20,10 @@ class EndpointTest extends MpfeuerTestCase {
     public function test_route_und_rewrite_regel_registriert(): void {
         $this->endpoint->register_routes();
         $this->endpoint->add_rewrite_rule();
-        $route = $GLOBALS['wp_stub']['routes']['ffami/v1/mpfeuer/rest/(?P<kennung>[0-9]{6})/Einsatz'] ?? null;
+        $route = $GLOBALS['wp_stub']['routes']['ffami/v1/mpfeuer/rest/(?P<kennung>[A-Za-z0-9]{6})/Einsatz'] ?? null;
         $this->assertNotNull($route);
         $this->assertSame('POST', $route['methods']);
-        $this->assertSame('index.php?rest_route=/ffami/v1/mpfeuer/rest/$matches[1]/Einsatz', $GLOBALS['wp_stub']['rewrite']['^mpfeuer/rest/([0-9]{6})/Einsatz/?$']);
+        $this->assertSame('index.php?rest_route=/ffami/v1/mpfeuer/rest/$matches[1]/Einsatz', $GLOBALS['wp_stub']['rewrite']['^mpfeuer/rest/([A-Za-z0-9]{6})/Einsatz/?$']);
     }
 
     public function test_ohne_zugangsdaten_401_mit_www_authenticate(): void {

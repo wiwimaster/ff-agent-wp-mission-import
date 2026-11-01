@@ -13,7 +13,7 @@ Voraussetzungen: PHP ≥ 8.1, Plugin „Action Scheduler“ (oder WooCommerce).
 ## MP-Feuer-Export
 
 FF-Agent schickt einen Einsatz per Hand („Export an MP-Feuer“) als
-`POST /mpfeuer/rest/<sechsstellige Kennung>/Einsatz` mit JSON-Body und HTTP Basic Auth. Das Plugin
+`POST /mpfeuer/rest/<sechsstellige Kennung aus Buchstaben und Ziffern>/Einsatz` mit JSON-Body und HTTP Basic Auth. Das Plugin
 
 1. prüft Zugangsdaten und `Content-Type: application/json` und antwortet `200 {}`
    (`401` mit `WWW-Authenticate: Basic realm="mpfeuer"` ohne bzw. mit falschen Zugangsdaten, `400` bei ungültigem
