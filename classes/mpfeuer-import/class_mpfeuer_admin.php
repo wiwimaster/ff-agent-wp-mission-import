@@ -30,7 +30,7 @@ class ffami_mpfeuer_admin {
         if (isset($_POST['ffami_mpfeuer_save']) && check_admin_referer('ffami_mpfeuer_settings')) {
             $changes = [
                 'tolerance'   => max(1, (int) ($_POST['mpf_tolerance'] ?? 10)) * 60,
-                'kennung'     => preg_match('/^[0-9]{6}$/', (string) ($_POST['mpf_kennung'] ?? '')) ? (string) $_POST['mpf_kennung'] : '',
+                'kennung'     => preg_match('/^[A-Za-z0-9]{6}$/', (string) ($_POST['mpf_kennung'] ?? '')) ? (string) $_POST['mpf_kennung'] : '',
                 'vehicle_map' => ffami_mpfeuer_settings::parse_map(wp_unslash((string) ($_POST['mpf_vehicle_map'] ?? ''))),
                 'orgs'        => ffami_mpfeuer_settings::parse_map(wp_unslash((string) ($_POST['mpf_orgs'] ?? ''))),
                 'types'       => ffami_mpfeuer_settings::parse_map(wp_unslash((string) ($_POST['mpf_types'] ?? ''))),
@@ -98,7 +98,7 @@ class ffami_mpfeuer_admin {
             echo '<tr><th><label for="mpf_pass">Passwort</label></th><td><input type="password" id="mpf_pass" name="mpf_pass" value="" autocomplete="new-password" /> '
                 . '<span class="description">' . (empty($s['pass_hash']) ? 'noch nicht gesetzt' : 'gesetzt (leer lassen = unverändert)') . '. Wird nur als Hash gespeichert; besser <code>FFAMI_MPFEUER_USER</code>/<code>FFAMI_MPFEUER_PASS</code> in <code>wp-config.php</code>.</span></td></tr>';
         }
-        echo '<tr><th><label for="mpf_kennung">Kennung</label></th><td><input type="text" id="mpf_kennung" name="mpf_kennung" pattern="[0-9]{6}" value="' . esc_attr(ffami_mpfeuer_settings::kennung()) . '" /> <span class="description">sechsstellig aus dem Pfad; leer = jede annehmen</span></td></tr>';
+        echo '<tr><th><label for="mpf_kennung">Kennung</label></th><td><input type="text" id="mpf_kennung" name="mpf_kennung" pattern="[A-Za-z0-9]{6}" value="' . esc_attr(ffami_mpfeuer_settings::kennung()) . '" /> <span class="description">sechsstellig aus dem Pfad (Buchstaben und Ziffern); leer = jede annehmen</span></td></tr>';
         echo '<tr><th><label for="mpf_tolerance">Toleranz (Minuten)</label></th><td><input type="number" min="1" max="120" id="mpf_tolerance" name="mpf_tolerance" value="' . esc_attr((string) intdiv(ffami_mpfeuer_settings::tolerance(), 60)) . '" /> <span class="description">Abstand Alarmzeit Widget ↔ Export</span></td></tr>';
         echo '<tr><th><label for="mpf_vehicle_map">Fahrzeug-Zuordnung</label></th><td><textarea id="mpf_vehicle_map" name="mpf_vehicle_map" rows="6" cols="60" placeholder="Steinebach 11/1 = MZF">' . esc_textarea(ffami_mpfeuer_settings::format_map((array) ($s['vehicle_map'] ?? []))) . '</textarea><br><span class="description">Je Zeile <code>FMS_ID = eigener Name</code></span></td></tr>';
         echo '<tr><th><label for="mpf_orgs">Organisationen</label></th><td><textarea id="mpf_orgs" name="mpf_orgs" rows="6" cols="60">' . esc_textarea(ffami_mpfeuer_settings::format_map(ffami_mpfeuer_settings::orgs())) . '</textarea><br><span class="description">Je Zeile <code>Funkrufname-Präfix = Kürzel</code>; <code>FW</code> = Feuerwehr (wird mit Namen gezeigt)</span></td></tr>';

@@ -12,7 +12,7 @@
 class ffami_mpfeuer_endpoint {
 
     public const REST_NAMESPACE = 'ffami/v1';
-    public const ROUTE = '/mpfeuer/rest/(?P<kennung>[0-9]{6})/Einsatz';
+    public const ROUTE = '/mpfeuer/rest/(?P<kennung>[A-Za-z0-9]{6})/Einsatz';
 
     private const REWRITE_VERSION = '1';
     private const OPTION_REWRITE = 'ffami_mpfeuer_rewrite';
@@ -41,7 +41,7 @@ class ffami_mpfeuer_endpoint {
     /** /mpfeuer/rest/<Kennung>/Einsatz → REST-Route, damit FF-Agent ohne /wp-json/ ankommt. */
     public function add_rewrite_rule(): void {
         add_rewrite_rule(
-            '^mpfeuer/rest/([0-9]{6})/Einsatz/?$',
+            '^mpfeuer/rest/([A-Za-z0-9]{6})/Einsatz/?$',
             'index.php?rest_route=/' . self::REST_NAMESPACE . '/mpfeuer/rest/$matches[1]/Einsatz',
             'top'
         );
@@ -135,7 +135,7 @@ class ffami_mpfeuer_endpoint {
         $route = $GLOBALS['wp']->query_vars['rest_route'] ?? ($_GET['rest_route'] ?? '');
         if (is_string($route) && $route !== '' && self::is_own_route($route)) { return true; }
         $uri = (string) ($_SERVER['REQUEST_URI'] ?? '');
-        return (bool) preg_match('#/mpfeuer/rest/[0-9]{6}/Einsatz#', $uri);
+        return (bool) preg_match('#/mpfeuer/rest/[A-Za-z0-9]{6}/Einsatz#', $uri);
     }
 
     /** Benutzer/Passwort aus Authorization-Header bzw. PHP_AUTH_* (je nach Server-API). */
