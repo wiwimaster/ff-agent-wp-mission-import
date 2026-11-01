@@ -55,11 +55,9 @@ class ffami_single_mission_import {
                 new ffami_image_import($this->mission);
             }
         } else {
-            // Unverändert: Alarmzeit nachziehen, falls sie noch fehlt
+            // Unverändert: Alarmzeit trotzdem aus dem Widget setzen (ersetzt Schätzwerte der Nachrüstung)
             $this->mission->post_id = $this->existing_post_id;
-            if ($this->mission->alarm_ts > 0 && !get_post_meta($this->existing_post_id, 'ffami_alarm_ts', true)) {
-                update_post_meta($this->existing_post_id, 'ffami_alarm_ts', $this->mission->alarm_ts);
-            }
+            $this->mission->store_alarm_ts();
         }
 
         // 5. Nachgelagerte Module (z.B. MP-Feuer-Zuordnung) – auch im Zweig "unverändert"

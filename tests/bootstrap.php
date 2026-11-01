@@ -20,7 +20,7 @@ function wp_stub_reset(): void {
         'next_id' => 1, 'routes' => [], 'rewrite' => [], 'remote' => [], 'insert_fail' => false,
     ];
     $_SERVER['REMOTE_ADDR'] = '192.0.2.1';
-    unset($_SERVER['PHP_AUTH_USER'], $_SERVER['PHP_AUTH_PW'], $_SERVER['HTTP_AUTHORIZATION'], $_SERVER['REQUEST_URI']);
+    unset($_SERVER['PHP_AUTH_USER'], $_SERVER['PHP_AUTH_PW'], $_SERVER['HTTP_AUTHORIZATION'], $_SERVER['REQUEST_URI'], $_SERVER['HTTP_X_FORWARDED_FOR'], $_SERVER['HTTP_CF_CONNECTING_IP']);
 }
 wp_stub_reset();
 

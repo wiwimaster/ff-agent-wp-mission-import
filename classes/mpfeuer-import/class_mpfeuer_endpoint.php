@@ -7,7 +7,11 @@
  * und erwartet nur einen 2xx-Status. Route: /wp-json/ffami/v1/mpfeuer/rest/<Kennung>/Einsatz,
  * zusätzlich per Rewrite-Regel ohne /wp-json/ erreichbar.
  *
- * Rohdaten werden nie geloggt oder gespeichert; nur das Ereignis (Zeit, _id, Ergebnis).
+ * Rohdaten werden nie geloggt oder gespeichert; nur das Ereignis (Zeit, Absender-IP, _id, Ergebnis).
+ *
+ * Absender-IP für Sperre und Log: REMOTE_ADDR, hinter einem vertrauten Proxy der letzte nicht vertraute
+ * Eintrag in X-Forwarded-For (von rechts). Vertraut sind private Bereiche und Docker-Netze, abweichend
+ * per Konstante FFAMI_TRUSTED_PROXIES in wp-config.php (CIDR-Liste, Komma oder Leerzeichen getrennt).
  */
 class ffami_mpfeuer_endpoint {
 
@@ -21,8 +25,13 @@ class ffami_mpfeuer_endpoint {
     private const MAX_FAILS = 10;     // Fehlversuche je IP …
     private const FAIL_WINDOW = 600;  // … in 10 Minuten
     private const MAX_BODY = 1048576; // 1 MB
+    private const DEFAULT_TRUSTED_PROXIES = ['127.0.0.0/8', '10.0.0.0/8', '172.16.0.0/12', '192.168.0.0/16', '169.254.0.0/16', '::1/128', 'fc00::/7', 'fe80::/10'];
+
+    /** Ergebnis je Request: WordPress ruft permission_callback für den Allow-Header (rest_send_allow_header) ein zweites Mal auf. */
+    private WeakMap $decisions;
 
     public function __construct() {
+        $this->decisions = new WeakMap();
         add_action('rest_api_init', [$this, 'register_routes']);
         add_action('init', [$this, 'add_rewrite_rule']);
         add_filter('rest_post_dispatch', [$this, 'add_auth_header'], 10, 3);
@@ -51,9 +60,16 @@ class ffami_mpfeuer_endpoint {
         }
     }
 
-    /** Prüft HTTP Basic Auth und optional die Kennung im Pfad. */
+    /** Prüft HTTP Basic Auth und optional die Kennung im Pfad – je Request nur einmal (zählt und loggt einmal). */
     public function check_permission($request) {
-        $ip = $this->client_ip();
+        if (!isset($this->decisions[$request])) {
+            $this->decisions[$request] = $this->decide($request);
+        }
+        return $this->decisions[$request];
+    }
+
+    private function decide($request) {
+        $ip = self::client_ip();
         if ($this->fail_count($ip) >= self::MAX_FAILS) {
             self::log_event('', 'gesperrt (429)');
             return new WP_Error('ffami_mpfeuer_rate_limited', 'Zu viele Fehlversuche', ['status' => 429]);
@@ -161,11 +177,11 @@ class ffami_mpfeuer_endpoint {
     public static function log_event(string $export_id, string $result): void {
         $events = get_option(self::OPTION_EVENTS, []);
         if (!is_array($events)) { $events = []; }
-        $events[] = ['time' => time(), 'id' => $export_id, 'result' => $result];
+        $events[] = ['time' => time(), 'ip' => self::client_ip(), 'id' => $export_id, 'result' => $result];
         if (count($events) > self::MAX_EVENTS) { $events = array_slice($events, -self::MAX_EVENTS); }
         update_option(self::OPTION_EVENTS, $events, false);
         if (class_exists('ffami_debug_logger')) {
-            ffami_debug_logger::log('MP-Feuer-Export ' . ($export_id !== '' ? $export_id . ' ' : '') . $result);
+            ffami_debug_logger::log('MP-Feuer-Export ' . ($export_id !== '' ? $export_id . ' ' : '') . $result, ['ip' => self::client_ip()]);
         }
     }
 
@@ -174,8 +190,59 @@ class ffami_mpfeuer_endpoint {
         return is_array($events) ? array_reverse($events) : [];
     }
 
-    private function client_ip(): string {
-        return (string) ($_SERVER['REMOTE_ADDR'] ?? '');
+    /**
+     * Absender-IP: REMOTE_ADDR, außer die Anfrage kommt von einem vertrauten Proxy. Dann von rechts durch
+     * X-Forwarded-For bis zum ersten nicht vertrauten Eintrag; ist die ganze Kette vertraut (etwa mit
+     * Cloudflare-Bereichen in FFAMI_TRUSTED_PROXIES), gilt CF-Connecting-IP.
+     */
+    public static function client_ip(?array $server = null): string {
+        $server ??= $_SERVER;
+        $remote = trim((string) ($server['REMOTE_ADDR'] ?? ''));
+        $trusted = self::trusted_proxies();
+        if (!self::ip_in_ranges($remote, $trusted)) {
+            return $remote;
+        }
+        $chain = array_map('trim', explode(',', (string) ($server['HTTP_X_FORWARDED_FOR'] ?? '')));
+        $chain = array_values(array_filter($chain, fn($ip) => filter_var($ip, FILTER_VALIDATE_IP) !== false));
+        for ($i = count($chain) - 1; $i >= 0; $i--) {
+            if (!self::ip_in_ranges($chain[$i], $trusted)) {
+                return $chain[$i];
+            }
+        }
+        $cf = trim((string) ($server['HTTP_CF_CONNECTING_IP'] ?? ''));
+        if (filter_var($cf, FILTER_VALIDATE_IP) !== false) {
+            return $cf;
+        }
+        return $chain[0] ?? $remote;
+    }
+
+    /** @return string[] CIDR-Bereiche aus FFAMI_TRUSTED_PROXIES oder die Standardliste. */
+    public static function trusted_proxies(): array {
+        if (!defined('FFAMI_TRUSTED_PROXIES')) {
+            return self::DEFAULT_TRUSTED_PROXIES;
+        }
+        $value = FFAMI_TRUSTED_PROXIES;
+        $list = is_array($value) ? $value : preg_split('/[\s,]+/', (string) $value);
+        return array_values(array_filter(array_map('trim', $list), 'strlen'));
+    }
+
+    /** Liegt $ip in einem der Bereiche (CIDR oder Einzeladresse, IPv4/IPv6)? */
+    public static function ip_in_ranges(string $ip, array $ranges): bool {
+        $bin = @inet_pton($ip);
+        if ($bin === false) { return false; }
+        foreach ($ranges as $range) {
+            [$net, $bits] = array_pad(explode('/', (string) $range, 2), 2, null);
+            $net_bin = @inet_pton((string) $net);
+            if ($net_bin === false || strlen($net_bin) !== strlen($bin)) { continue; }
+            $bits = $bits === null ? strlen($bin) * 8 : (int) $bits;
+            $bytes = intdiv($bits, 8);
+            if (substr($bin, 0, $bytes) !== substr($net_bin, 0, $bytes)) { continue; }
+            $rest = $bits % 8;
+            if ($rest === 0) { return true; }
+            $mask = (0xFF << (8 - $rest)) & 0xFF;
+            if ((ord($bin[$bytes]) & $mask) === (ord($net_bin[$bytes]) & $mask)) { return true; }
+        }
+        return false;
     }
 
     private function fail_count(string $ip): int {

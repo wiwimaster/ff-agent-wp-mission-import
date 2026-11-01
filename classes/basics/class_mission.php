@@ -72,7 +72,7 @@ class ffami_mission {
         $this->set_location($mission_data['location']);
         $this->set_person_count($mission_data['personCount']);
         $this->set_mission_type($mission_data['type']);
-        $this->set_vehicles($mission_data['vehicles']);
+        $this->set_vehicles($mission_data['vehicles'] ?? []); // fehlt im Widget bei Einsätzen ohne Fahrzeug
         $this->set_title($mission_data['title'], $mission_data['type'] ?? '');
         $this->set_raw_title($mission_data['title']);
 
@@ -96,7 +96,15 @@ class ffami_mission {
         update_post_meta($this->post_id, 'ffami_mission_vehicles', $this->vehicles);
         update_post_meta($this->post_id, 'ffami_mission_hash', $this->md5_hash); // legacy key actually used elsewhere
         update_post_meta($this->post_id, 'ffami_mission_md5_hash', $this->md5_hash); // key referenced by import logic
-        if ($this->alarm_ts > 0) {
+        $this->store_alarm_ts();
+    }
+
+    /**
+     * Alarmzeit aus dem Widget nach ffami_alarm_ts schreiben, auch über einen vorhandenen Wert
+     * (die einmalige Nachrüstung hat ihn aus post_date_gmt geschätzt). Ohne Alarmzeit bleibt der Wert.
+     */
+    public function store_alarm_ts(): void {
+        if ($this->alarm_ts > 0 && (int) get_post_meta($this->post_id, 'ffami_alarm_ts', true) !== $this->alarm_ts) {
             update_post_meta($this->post_id, 'ffami_alarm_ts', $this->alarm_ts);
         }
     }
@@ -285,7 +293,7 @@ class ffami_mission {
      */
     public function set_vehicles($vehicles): void {
         $titles = [];
-        foreach ($vehicles as $vehicle) {
+        foreach ((array) $vehicles as $vehicle) {
             if (isset($vehicle['title'])) {
                 $titles[] = (string)$vehicle['title'];
             }
