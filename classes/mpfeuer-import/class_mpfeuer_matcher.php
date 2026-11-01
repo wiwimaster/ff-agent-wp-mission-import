@@ -33,7 +33,7 @@ class ffami_mpfeuer_matcher {
     public function __construct() {
         add_action('ffami_mission_saved', [$this, 'on_mission_saved'], 10, 1);
         add_action(self::CLEANUP_HOOK, [$this, 'cleanup']);
-        add_action('admin_init', [self::class, 'backfill_alarm_ts']);
+        add_action('admin_init', [$this, 'backfill_on_admin_init']);
         add_action('init', [$this, 'schedule_cleanup'], 20);
         add_filter('is_protected_meta', [$this, 'protect_internal_meta'], 10, 2);
     }
@@ -199,6 +199,11 @@ class ffami_mpfeuer_matcher {
         if (!as_has_scheduled_action(self::CLEANUP_HOOK, [], 'ffami')) {
             as_schedule_recurring_action(time() + 600, 86400, self::CLEANUP_HOOK, [], 'ffami');
         }
+    }
+
+    /** Hook-Hülle ohne Parameter: WordPress reicht bei admin_init einen Leerstring als erstes Argument durch. */
+    public function backfill_on_admin_init(): void {
+        self::backfill_alarm_ts();
     }
 
     /**
