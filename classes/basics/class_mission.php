@@ -96,7 +96,15 @@ class ffami_mission {
         update_post_meta($this->post_id, 'ffami_mission_vehicles', $this->vehicles);
         update_post_meta($this->post_id, 'ffami_mission_hash', $this->md5_hash); // legacy key actually used elsewhere
         update_post_meta($this->post_id, 'ffami_mission_md5_hash', $this->md5_hash); // key referenced by import logic
-        if ($this->alarm_ts > 0) {
+        $this->store_alarm_ts();
+    }
+
+    /**
+     * Alarmzeit aus dem Widget nach ffami_alarm_ts schreiben, auch über einen vorhandenen Wert
+     * (die einmalige Nachrüstung hat ihn aus post_date_gmt geschätzt). Ohne Alarmzeit bleibt der Wert.
+     */
+    public function store_alarm_ts(): void {
+        if ($this->alarm_ts > 0 && (int) get_post_meta($this->post_id, 'ffami_alarm_ts', true) !== $this->alarm_ts) {
             update_post_meta($this->post_id, 'ffami_alarm_ts', $this->alarm_ts);
         }
     }

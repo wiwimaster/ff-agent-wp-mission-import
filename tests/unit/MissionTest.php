@@ -96,6 +96,46 @@ class MissionTest extends MpfeuerTestCase {
         $this->assertSame((string) (self::EXPORT_TS + 46), get_post_meta($id, 'ffami_alarm_ts', true));
     }
 
+    public function test_widget_import_ueberschreibt_geschaetzte_alarmzeit(): void {
+        $this->stub_widget();
+        $this->import();
+        $id = array_key_last($GLOBALS['wp_stub']['posts']);
+
+        // unverändert, Nachrüstung hatte post_date_gmt (14 h daneben) eingetragen
+        update_post_meta($id, 'ffami_alarm_ts', self::EXPORT_TS + 14 * 3600);
+        $this->import();
+        $this->assertSame((string) (self::EXPORT_TS + 46), get_post_meta($id, 'ffami_alarm_ts', true));
+
+        // geändert: ebenso
+        update_post_meta($id, 'ffami_alarm_ts', self::EXPORT_TS - 19 * 3600);
+        $this->stub_widget(['detail' => '<p>Geändert</p>']);
+        $this->import();
+        $this->assertSame((string) (self::EXPORT_TS + 46), get_post_meta($id, 'ffami_alarm_ts', true));
+    }
+
+    public function test_widget_ohne_alarmzeit_laesst_wert_stehen(): void {
+        $m = new ffami_mission();
+        $m->post_id = wp_insert_post(['post_type' => 'mission']);
+        update_post_meta($m->post_id, 'ffami_alarm_ts', 1234);
+        $m->store_alarm_ts();
+        $this->assertSame('1234', get_post_meta($m->post_id, 'ffami_alarm_ts', true));
+    }
+
+    public function test_korrigierte_alarmzeit_ordnet_offenen_export_zu(): void {
+        $this->configure();
+        new ffami_mpfeuer_matcher();
+        $this->stub_widget();
+        $this->import();
+        $id = array_key_last($GLOBALS['wp_stub']['posts']);
+        update_post_meta($id, 'ffami_alarm_ts', self::EXPORT_TS + 14 * 3600);
+        (new ffami_mpfeuer_endpoint())->handle($this->request(json_encode($this->export(), JSON_UNESCAPED_UNICODE)));
+        $queue_id = ffami_mpfeuer_queue::find_by_export_id('00000000-0000-4000-8000-000000000001');
+        $this->assertSame(ffami_mpfeuer_queue::STATUS_OPEN, ffami_mpfeuer_queue::get_status($queue_id));
+
+        $this->import(); // Jahresimport läuft erneut, Beitrag unverändert
+        $this->assertSame(ffami_mpfeuer_queue::STATUS_MATCHED, ffami_mpfeuer_queue::get_status($queue_id));
+    }
+
     public function test_update_behaelt_slug(): void {
         $this->stub_widget();
         $this->import();

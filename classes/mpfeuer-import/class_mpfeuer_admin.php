@@ -118,9 +118,9 @@ class ffami_mpfeuer_admin {
             . ' · Verworfen: ' . esc_html((string) ffami_mpfeuer_queue::count(ffami_mpfeuer_queue::STATUS_DISCARDED)) . '</p>';
         $events = array_slice(ffami_mpfeuer_endpoint::get_events(), 0, 10);
         if ($events) {
-            echo '<table class="widefat striped" style="max-width:750px"><thead><tr><th>Zeit</th><th>Export-ID</th><th>Ergebnis</th></tr></thead><tbody>';
+            echo '<table class="widefat striped" style="max-width:750px"><thead><tr><th>Zeit</th><th>Absender</th><th>Export-ID</th><th>Ergebnis</th></tr></thead><tbody>';
             foreach ($events as $ev) {
-                echo '<tr><td>' . esc_html(wp_date('Y-m-d H:i:s', (int) $ev['time'])) . '</td><td><code>' . esc_html((string) $ev['id']) . '</code></td><td>' . esc_html((string) $ev['result']) . '</td></tr>';
+                echo '<tr><td>' . esc_html(wp_date('Y-m-d H:i:s', (int) $ev['time'])) . '</td><td>' . esc_html((string) ($ev['ip'] ?? '')) . '</td><td><code>' . esc_html((string) $ev['id']) . '</code></td><td>' . esc_html((string) $ev['result']) . '</td></tr>';
             }
             echo '</tbody></table>';
         }
