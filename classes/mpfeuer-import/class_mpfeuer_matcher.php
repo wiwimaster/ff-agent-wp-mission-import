@@ -7,7 +7,8 @@
  * Toleranz aus den Einstellungen). Läuft in beide Richtungen: beim Eingang
  * eines Exports und nach jedem gespeicherten Widget-Einsatz (ffami_mission_saved).
  * Mehrdeutige Treffer werden über die Fahrzeugnamen plausibilisiert, sonst
- * bleiben sie offen und erscheinen im Backend.
+ * bleiben sie offen und erscheinen im Backend. Offene Einträge bleiben ohne
+ * Frist liegen, bis der Einsatz im Widget erscheint (auch Jahre später).
  */
 class ffami_mpfeuer_matcher {
 
@@ -16,8 +17,8 @@ class ffami_mpfeuer_matcher {
     public const RESULT_AMBIGUOUS = 'mehrdeutig';
     public const RESULT_DISCARDED = 'verworfen';
 
+    /** Früherer Aufräum-Job (verwarf offene Einträge nach 90 Tagen); wird nur noch abgemeldet. */
     private const CLEANUP_HOOK = 'ffami_mpfeuer_cleanup';
-    private const CLEANUP_AGE = 90 * 86400;
     private const OPTION_BACKFILL_DONE = 'ffami_alarm_ts_backfilled';
 
     /** Meta-Keys an der Mission, die nur intern gespeichert und nie ausgegeben werden. */
@@ -32,9 +33,8 @@ class ffami_mpfeuer_matcher {
 
     public function __construct() {
         add_action('ffami_mission_saved', [$this, 'on_mission_saved'], 10, 1);
-        add_action(self::CLEANUP_HOOK, [$this, 'cleanup']);
         add_action('admin_init', [$this, 'backfill_on_admin_init']);
-        add_action('init', [$this, 'schedule_cleanup'], 20);
+        add_action('admin_init', [$this, 'unschedule_cleanup']);
         add_filter('is_protected_meta', [$this, 'protect_internal_meta'], 10, 2);
     }
 
@@ -182,22 +182,11 @@ class ffami_mpfeuer_matcher {
         return $stats;
     }
 
-    /** Täglich: unzugeordnete Einträge älter als 90 Tage verwerfen; Nachrüstung fortsetzen. */
-    public function cleanup(): void {
-        self::backfill_alarm_ts();
-        $limit = time() - self::CLEANUP_AGE;
-        foreach (ffami_mpfeuer_queue::list_ids(ffami_mpfeuer_queue::STATUS_OPEN, -1) as $id) {
-            $post = get_post($id);
-            if ($post && strtotime($post->post_date_gmt . ' UTC') < $limit) {
-                ffami_mpfeuer_queue::set_status($id, ffami_mpfeuer_queue::STATUS_DISCARDED);
-            }
-        }
-    }
-
-    public function schedule_cleanup(): void {
-        if (!function_exists('as_schedule_recurring_action') || !function_exists('as_has_scheduled_action')) { return; }
-        if (!as_has_scheduled_action(self::CLEANUP_HOOK, [], 'ffami')) {
-            as_schedule_recurring_action(time() + 600, 86400, self::CLEANUP_HOOK, [], 'ffami');
+    /** Alten Aufräum-Job aus Action Scheduler entfernen. */
+    public function unschedule_cleanup(): void {
+        if (!function_exists('as_has_scheduled_action') || !function_exists('as_unschedule_all_actions')) { return; }
+        if (as_has_scheduled_action(self::CLEANUP_HOOK, [], 'ffami')) {
+            as_unschedule_all_actions(self::CLEANUP_HOOK, [], 'ffami');
         }
     }
 

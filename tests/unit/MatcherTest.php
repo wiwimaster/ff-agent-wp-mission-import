@@ -125,11 +125,50 @@ class MatcherTest extends MpfeuerTestCase {
         $this->assertSame(['MZF', 'UAV Steinebach'], get_post_meta($mission, 'ffami_mpf_vehicles', true));
     }
 
-    public function test_aufraeumer_verwirft_alte_offene_eintraege(): void {
+    public function test_offener_eintrag_bleibt_ohne_frist_und_ordnet_spaeter_zu(): void {
         $queue_id = $this->receive();
-        get_post($queue_id)->post_date_gmt = gmdate('Y-m-d H:i:s', time() - 91 * 86400);
-        (new ffami_mpfeuer_matcher())->cleanup();
-        $this->assertSame(ffami_mpfeuer_queue::STATUS_DISCARDED, ffami_mpfeuer_queue::get_status($queue_id));
+        get_post($queue_id)->post_date_gmt = gmdate('Y-m-d H:i:s', time() - 3 * 365 * 86400);
+        do_action('admin_init');
+        $this->assertSame(ffami_mpfeuer_queue::STATUS_OPEN, ffami_mpfeuer_queue::get_status($queue_id));
+
+        $mission = $this->create_mission(self::EXPORT_TS + 30);
+        do_action('ffami_mission_saved', $mission, null, true);
+        $this->assertSame(ffami_mpfeuer_queue::STATUS_MATCHED, ffami_mpfeuer_queue::get_status($queue_id));
+    }
+
+    public function test_doppelter_export_legt_keinen_zweiten_eintrag_an(): void {
+        $mission = $this->create_mission(self::EXPORT_TS);
+        $queue_id = $this->receive();
+        $this->receive(['Einsatz' => ['Allgemein' => ['Alarmstichwort' => 'THL 1']]]);
+        $this->assertCount(1, ffami_mpfeuer_queue::list_ids(ffami_mpfeuer_queue::STATUS_MATCHED, -1));
+        $this->assertSame([], ffami_mpfeuer_queue::list_ids(ffami_mpfeuer_queue::STATUS_OPEN, -1));
+        $this->assertSame((string) $mission, get_post_meta($queue_id, 'ffami_matched_post', true));
+        $this->assertSame('THL 1', ffami_mpfeuer_queue::get_record($queue_id)->stichwort);
+    }
+
+    public function test_derselbe_einsatz_mit_neuer_id_aktualisiert_bestehenden_eintrag(): void {
+        $mission = $this->create_mission(self::EXPORT_TS);
+        $queue_id = $this->receive();
+        $new_id = '00000000-0000-4000-8000-000000000002';
+        $this->endpoint->handle($this->request(json_encode($this->export([
+            'Einsatz' => ['_id' => $new_id, 'Allgemein' => ['Alarmstichwort' => 'THL 1']],
+        ]), JSON_UNESCAPED_UNICODE)));
+
+        $this->assertSame($queue_id, ffami_mpfeuer_queue::find_by_export_id($new_id));
+        $this->assertCount(1, ffami_mpfeuer_queue::list_ids(ffami_mpfeuer_queue::STATUS_MATCHED, -1));
+        $this->assertSame([], ffami_mpfeuer_queue::list_ids(ffami_mpfeuer_queue::STATUS_OPEN, -1));
+        $this->assertSame($new_id, get_post_meta($mission, 'ffami_mpf_id', true));
+        $this->assertSame('THL 1', get_post_meta($mission, 'ffami_mpf_stichwort', true));
+        $this->assertSame('aktualisiert, zugeordnet', end($GLOBALS['wp_stub']['options']['ffami_mpfeuer_events'])['result']);
+    }
+
+    public function test_anderer_einsatz_mit_anderer_alarmzeit_bleibt_eigener_eintrag(): void {
+        $first = $this->receive();
+        $this->endpoint->handle($this->request(json_encode($this->export([
+            'Einsatz' => ['_id' => '00000000-0000-4000-8000-000000000002', 'Allgemein' => ['Zeit_Von' => '2026-09-26T01:22:14']],
+        ]), JSON_UNESCAPED_UNICODE)));
+        $this->assertNotSame($first, ffami_mpfeuer_queue::find_by_export_id('00000000-0000-4000-8000-000000000002'));
+        $this->assertCount(2, ffami_mpfeuer_queue::list_ids(ffami_mpfeuer_queue::STATUS_OPEN, -1));
     }
 
     public function test_alarm_ts_nachruesten(): void {

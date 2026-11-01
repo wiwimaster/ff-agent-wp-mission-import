@@ -36,13 +36,14 @@ class ffami_mpfeuer_queue {
     }
 
     /**
-     * Speichert einen Datensatz; dedupliziert über die Export-_id.
-     * Ein erneuter Export derselben _id aktualisiert den Eintrag (Status bleibt).
+     * Speichert einen Datensatz; dedupliziert über die Export-_id, ersatzweise über
+     * die sekundengenaue Alarmzeit (derselbe Einsatz mit neuer _id exportiert).
+     * Ein erneuter Export aktualisiert den Eintrag (Status bleibt), die neue _id gilt.
      *
      * @return array{0:int,1:bool} [Queue-Post-ID, neu angelegt?]
      */
     public static function store(ffami_mpfeuer_record $record): array {
-        $existing = self::find_by_export_id($record->id);
+        $existing = self::find_by_export_id($record->id) ?: self::find_by_alarm_ts((int) $record->start_ts);
         $title = trim('MP-Feuer ' . ($record->stichwort !== '' ? $record->stichwort : $record->kategorie));
         if ($record->start_ts) { $title .= ' ' . wp_date('Y-m-d H:i', $record->start_ts); }
         // HEX-Flags: keine <, >, & im Inhalt, damit kses/Filter das JSON nicht verändern
@@ -74,6 +75,21 @@ class ffami_mpfeuer_queue {
             'posts_per_page' => 1,
             'fields'         => 'ids',
             'meta_query'     => [['key' => 'ffami_mpfeuer_id', 'value' => strtolower($export_id), 'compare' => '=']],
+        ]);
+        return $ids ? (int) $ids[0] : 0;
+    }
+
+    /** Eintrag mit genau dieser Alarmzeit (Sekunde), 0 wenn keiner oder Zeit fehlt. */
+    public static function find_by_alarm_ts(int $ts): int {
+        if ($ts <= 0) { return 0; }
+        $ids = get_posts([
+            'post_type'      => self::POST_TYPE,
+            'post_status'    => 'any',
+            'posts_per_page' => 1,
+            'fields'         => 'ids',
+            'orderby'        => 'ID',
+            'order'          => 'ASC',
+            'meta_query'     => [['key' => 'ffami_alarm_ts', 'value' => $ts, 'compare' => '=', 'type' => 'NUMERIC']],
         ]);
         return $ids ? (int) $ids[0] : 0;
     }
