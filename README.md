@@ -20,11 +20,14 @@ FF-Agent schickt einen Einsatz per Hand („Export an MP-Feuer“) als
    JSON, `415` bei falschem Content-Type, `429` nach zehn Fehlversuchen je Absender-IP in zehn Minuten),
 2. wendet sofort die Datenregeln an und verwirft alles andere (siehe unten),
 3. legt den bereinigten Datensatz in einer internen Warteschlange ab (Post-Typ `ffami_mpfeuer`, nicht öffentlich,
-   ohne REST, ohne Suche), dedupliziert über die Export-`_id`,
+   ohne REST, ohne Suche). Ein erneuter Export desselben Einsatzes legt keinen zweiten Eintrag an, sondern
+   aktualisiert den bestehenden samt zugeordnetem Beitrag: erkannt über die Export-`_id`, ersatzweise über die
+   sekundengenaue Alarmzeit (`Zeit_Von`), falls MP-Feuer den Einsatz mit neuer `_id` schickt; dann gilt die neue `_id`,
 4. ordnet ihn über die Alarmzeit dem Widget-Einsatz zu (Meta `ffami_alarm_ts`, die der Widget-Import bei jedem Lauf
    aus `alarmDate` setzt; Standard-Toleranz ±10 Minuten, einstellbar). Kommt der
    Export vor dem Widget-Einsatz an, bleibt er `offen` und wird nach dem nächsten Widget-Import zugeordnet
-   (Action `ffami_mission_saved`). Mehrere Einsätze im Zeitfenster werden über die Fahrzeugnamen plausibilisiert;
+   (Action `ffami_mission_saved`), ohne Frist, auch wenn der Einsatz erst Jahre später veröffentlicht wird.
+   Ein Export allein erscheint nie öffentlich. Mehrere Einsätze im Zeitfenster werden über die Fahrzeugnamen plausibilisiert;
    bleibt es mehrdeutig, entscheidest du im Backend.
 
 Die Zuordnung schreibt `ffami_mpf_*`-Metas an den `mission`-Beitrag. Der Widget-Import überschreibt sie nicht;
@@ -101,7 +104,8 @@ die mittlere Zahl). Beide Tabellen sind im Backend pflegbar. Was sich nicht eino
 - Adresse und Besatzungsstärke liegen nur als interne Metas (`ffami_mpf_address`, `ffami_mpf_crew`, als geschützte
   Metas ausgeblendet) am Beitrag und werden von keiner öffentlichen Ausgabe geliefert. Der Post-Typ `mission` hat
   keine REST-Ausgabe.
-- Unzugeordnete Exporte werden nach 90 Tagen automatisch verworfen.
+- Unzugeordnete Exporte werden nicht automatisch verworfen; sie bleiben intern liegen, bis sie zugeordnet oder im
+  Backend von Hand verworfen werden.
 
 ## Entwicklung
 
